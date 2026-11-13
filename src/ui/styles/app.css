@@ -123,11 +123,6 @@ p {
   background: var(--state-promo-soft);
   color: var(--state-promo-text);
 }
-/* Promoción que nombra un color (CONDICIÓN = "VERDE", "MAGENTA"…): texto y fondo en ese color. */
-.pill[data-color] {
-  color: var(--c);
-  background: color-mix(in srgb, var(--c) 15%, var(--bg-surface));
-}
 .pill--ok {
   background: var(--stock-ok-soft);
   color: var(--stock-ok);
@@ -140,34 +135,10 @@ p {
   background: var(--stock-none-soft);
   color: var(--stock-none);
 }
-/* Color de la promoción (columna CONDICIÓN): `data-color` define --c; lo usan la etiqueta
-   de inventario y la tarjeta "Condición" del detalle. */
-.promo-color,
+/* Color de la promoción (columna CONDICIÓN): `data-color` define --c; lo usan la
+   etiqueta de condición y la tarjeta "Condición" del detalle. */
 .price--condition {
   --c: var(--text-secondary);
-}
-/* Etiqueta: círculo del color con la inicial en mayúscula, después del inventario. */
-.promo-color {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-pill);
-  background: var(--c);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-}
-/* Colores claros: la inicial va oscura para que se lea. */
-.promo-color[data-color='amarillo'],
-.promo-color[data-color='dorado'],
-.promo-color[data-color='celeste'],
-.promo-color[data-color='lila'],
-.promo-color[data-color='rosado'],
-.promo-color[data-color='rosa'] {
-  color: #1f2328;
 }
 [data-color='magenta'] { --c: #e6007e; }
 [data-color='fucsia'] { --c: #d81b78; }
@@ -1055,9 +1026,32 @@ p {
 .row__cond[data-condition='PROMO'] {
   color: var(--state-promo-text);
 }
-/* CONDICIÓN con color propio ("VERDE", "MAGENTA"…): el texto usa ese color. */
+/* CONDICIÓN con color propio ("VERDE", "MAGENTA"…): mismo estilo de etiqueta
+   que antes llevaba el color, ahora con el nombre de la condición. */
+.pill[data-color],
 .row__cond[data-color] {
-  color: var(--c);
+  background: var(--c);
+  color: #ffffff;
+}
+.row__cond[data-color] {
+  justify-self: start;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+}
+/* Colores claros: el texto va oscuro para que se lea. */
+.pill[data-color='amarillo'],
+.pill[data-color='dorado'],
+.pill[data-color='celeste'],
+.pill[data-color='lila'],
+.pill[data-color='rosado'],
+.pill[data-color='rosa'],
+.row__cond[data-color='amarillo'],
+.row__cond[data-color='dorado'],
+.row__cond[data-color='celeste'],
+.row__cond[data-color='lila'],
+.row__cond[data-color='rosado'],
+.row__cond[data-color='rosa'] {
+  color: #1f2328;
 }
 .row__price {
   font-weight: 600;
