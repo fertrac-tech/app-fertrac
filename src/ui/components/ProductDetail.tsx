@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
@@ -44,18 +45,27 @@ function DetailPhoto({ url, alt, onZoom }: { url: string; alt: string; onZoom: (
 /** Foto ampliada en un diálogo centrado; cierra con Escape, el botón o tocando fuera. */
 function PhotoDialog({ url, alt, onClose }: { url: string; alt: string; onClose: () => void }) {
   const { src, onError } = useDriveImage(url, 1600);
+  const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const previous = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      previous?.focus?.();
+    };
   }, [onClose]);
-  return (
+  // Portal al body: el diálogo no queda atrapado en el contexto de apilado del detalle
+  // (en móvil `.detail--overlay` tiene z-index propio) y siempre cubre el texto.
+  return createPortal(
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={alt} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <button type="button" className="icon-btn lightbox__close" aria-label="Cerrar foto" onClick={onClose}>
+      <button ref={closeRef} type="button" className="icon-btn lightbox__close" aria-label="Cerrar foto" onClick={onClose}>
         <Icon name="close" size={24} />
       </button>
-      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} />
-    </div>
+      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} onClick={onClose} />
+    </div>,
+    document.body,
   );
 }
 

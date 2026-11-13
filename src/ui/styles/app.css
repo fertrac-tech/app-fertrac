@@ -1035,11 +1035,18 @@ p {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: hidden;
   background: var(--scrim);
 }
+/* El alto se limita contra el viewport: `max-height: 100%` no funciona fiable en
+   una fila de grid de tamaño automático y una foto vertical se desbordaba. */
 .lightbox img {
+  display: block;
+  width: auto;
+  height: auto;
   max-width: min(100%, 1200px);
-  max-height: 100%;
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   border-radius: var(--radius-md);
   background: var(--bg-surface);
   object-fit: contain;
@@ -1048,6 +1055,7 @@ p {
 }
 .lightbox__close {
   position: absolute;
+  z-index: 1;
   top: 12px;
   right: 12px;
   color: var(--text-inverse);
