@@ -33,7 +33,7 @@ ejecuta todo en cada push y pull request.
 
 | Regla | Módulo | Prueba |
 |---|---|---|
-| Orden: NUEVO con inventario → PROMO con inventario → normales → sin inventario; A–Z dentro de cada nivel | `domain/product.ts`, `domain/catalogQuery.ts` | `catalogQuery.test.ts` |
+| Orden alfabético (A–Z) por nombre de Producto, desempate por referencia | `domain/catalogQuery.ts` | `catalogQuery.test.ts` |
 | 100 unidades por página, total y rango visibles, página en la URL (`?p=2`) | `domain/pagination.ts` | `pagination.test.ts` |
 | Favoritos con alias y listas propias | `domain/favorites.ts` | `favorites.test.ts` |
 | Seguridad: Google → lista blanca → dispositivo | `domain/access.ts`, `app/sessionController.ts` | `access.test.ts`, `sessionController.test.ts` |

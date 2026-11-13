@@ -1,5 +1,5 @@
 import { paginate, PAGE_SIZE, type PageInfo } from './pagination';
-import { priorityTier, type Condition, type Product } from './product';
+import type { Condition, Product } from './product';
 import { compareText, normalize } from './text';
 
 export const FILTER_KEYS = ['line', 'brand', 'category', 'subcategory', 'type', 'condition'] as const;
@@ -26,11 +26,11 @@ export const CONDITION_LABEL: Record<Condition, string> = {
 };
 
 /**
- * Orden oficial del catálogo y de la búsqueda:
- * nivel de prioridad → nombre de producto A–Z → referencia (desempate).
+ * Orden oficial del catálogo y de la búsqueda: alfabético por nombre de producto (A–Z),
+ * con la referencia como desempate para un orden estable.
  */
 export function compareProducts(a: Product, b: Product): number {
-  return priorityTier(a) - priorityTier(b) || compareText(a.name, b.name) || compareText(a.ref, b.ref);
+  return compareText(a.name, b.name) || compareText(a.ref, b.ref);
 }
 
 export function sortCatalog(products: readonly Product[]): Product[] {

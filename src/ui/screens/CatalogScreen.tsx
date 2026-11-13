@@ -169,7 +169,7 @@ export function CatalogScreen() {
               {expanded && (
                 <div className="meta meta--inline">
                   <span>{total} productos</span>
-                  <span className="meta__order">Orden: prioridad + A–Z</span>
+                  <span className="meta__order">Orden: A–Z (Producto)</span>
                 </div>
               )}
           </div>
@@ -180,7 +180,7 @@ export function CatalogScreen() {
             <span>
               {total} productos{page ? ` · pág. ${page.page} de ${page.totalPages}` : ''}
             </span>
-            <span className="meta__order">Prioridad + A–Z</span>
+            <span className="meta__order">A–Z</span>
           </div>
         )}
 

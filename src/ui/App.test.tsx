@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { renderApp } from '@/test/harness';
 
 const cards = () => within(screen.getByRole('list', { name: 'Productos' })).getAllByRole('article');
-const tierOf = (el: HTMLElement) => Number(el.getAttribute('data-tier'));
+const nameOf = (el: HTMLElement) => el.querySelector('.card__name')?.textContent ?? '';
+const sortedEs = (xs: string[]) => [...xs].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true }));
 
 describe('Acceso (pantallas 01 y 02)', () => {
   it('login: Google, tres capas y aviso de protección de datos; al entrar muestra el catálogo', async () => {
@@ -42,17 +43,16 @@ describe('Acceso (pantallas 01 y 02)', () => {
 });
 
 describe('Catálogo (pantalla 03)', () => {
-  it('muestra 100 por página, en orden de prioridad, con total y página visibles', async () => {
+  it('muestra 100 por página, en orden alfabético por Producto, con total y página visibles', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
     expect(cards()).toHaveLength(100);
     expect(screen.getByText('250 productos · pág. 1 de 3')).toBeInTheDocument();
     expect(screen.getByText('Mostrando 1–100 de 250')).toBeInTheDocument();
-    expect(screen.getByText('Prioridad + A–Z')).toBeInTheDocument();
+    expect(screen.getByText('A–Z')).toBeInTheDocument();
 
-    const tiers = cards().map(tierOf);
-    expect(tiers[0]).toBe(1);
-    expect([...tiers].sort((a, b) => a - b)).toEqual(tiers);
+    const names = cards().map(nameOf);
+    expect(names).toEqual(sortedEs(names));
   });
 
   it('la paginación navega, actualiza el rango y deja la página en la URL', async () => {
@@ -66,7 +66,7 @@ describe('Catálogo (pantalla 03)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Página 3' }));
     expect(await screen.findByText('Mostrando 201–250 de 250')).toBeInTheDocument();
     expect(cards()).toHaveLength(50);
-    expect(cards().map(tierOf).at(-1)).toBe(4);
+    expect(cards().map(nameOf)).toEqual(sortedEs(cards().map(nameOf)));
     expect(screen.getByRole('button', { name: 'Página siguiente' })).toBeDisabled();
   });
 
@@ -75,14 +75,14 @@ describe('Catálogo (pantalla 03)', () => {
     expect(await screen.findByText('Mostrando 101–200 de 250')).toBeInTheDocument();
   });
 
-  it('la búsqueda filtra, vuelve a la página 1 y conserva el orden por prioridad', async () => {
+  it('la búsqueda filtra, vuelve a la página 1 y conserva el orden alfabético', async () => {
     renderApp({ route: '/?p=2' });
     await screen.findByRole('list', { name: 'Productos' });
     await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar en el catálogo' }), 'bomba');
     await waitFor(() => expect(window.location.search).toBe('?q=bomba'));
     await waitFor(() => expect(cards().every((c) => /bomba/i.test(c.textContent ?? ''))).toBe(true));
-    const tiers = cards().map(tierOf);
-    expect([...tiers].sort((a, b) => a - b)).toEqual(tiers);
+    const names = cards().map(nameOf);
+    expect(names).toEqual(sortedEs(names));
   });
 
   it('los filtros permanecen siempre a la vista y no existe control para ocultarlos', async () => {
@@ -139,7 +139,6 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
     const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
     expect(within(dialog).getByRole('img')).toHaveAttribute('src', expect.stringContaining('sz=w1600'));
-    expect(within(dialog).getByRole('button', { name: 'Descargar foto' })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar foto' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

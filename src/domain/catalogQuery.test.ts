@@ -17,18 +17,11 @@ const catalog = [
 const refs = (items: { ref: string }[]) => items.map((p) => p.ref);
 
 describe('orden del catálogo', () => {
-  it('NUEVO con stock → PROMO con stock → normales → sin inventario, cada nivel A–Z', () => {
-    expect(refs(sortCatalog(catalog))).toEqual([
-      'AMK-2210', // nuevo
-      'BAC-1450', // nuevo
-      'CRC-1810', // promo
-      'FAP-3321', // promo
-      'KEM-1550', // normal
-      'RAF-0780', // normal
-      'NVO-0000', // sin inventario (aunque sea NUEVO)
-      'TDI-0412', // sin inventario
-      'PRM-0000', // sin inventario (aunque sea PROMO)
-    ]);
+  it('ordena solo alfabéticamente por nombre de producto (sin prioridad por condición ni inventario)', () => {
+    const names = sortCatalog(catalog).map((p) => p.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true })));
+    // La condición y el inventario ya no afectan el orden: un NUEVO sin stock no se va al final.
+    expect(refs(sortCatalog(catalog))[0]).toBe('NVO-0000'); // "ABRAZADERA NUEVA SIN STOCK" va primero por la A
   });
 
   it('desempata por referencia cuando el nombre coincide', () => {
@@ -47,17 +40,15 @@ describe('orden del catálogo', () => {
 describe('CatalogIndex.query', () => {
   const index = new CatalogIndex(catalog);
 
-  it('sin criterios devuelve todo el catálogo ordenado', () => {
+  it('sin criterios devuelve todo el catálogo en orden alfabético', () => {
     const page = index.query();
     expect(page.total).toBe(catalog.length);
-    expect(page.items[0]?.ref).toBe('AMK-2210');
+    expect(page.items[0]?.ref).toBe('NVO-0000'); // "ABRAZADERA NUEVA SIN STOCK"
   });
 
-  it('la búsqueda conserva el orden por prioridad', () => {
-    const page = index.query({ text: 'stock' });
-    expect(refs(page.items)).toEqual(['NVO-0000', 'PRM-0000']);
-    const withA = index.query({ text: 'a' });
-    expect(refs(withA.items).slice(0, 2)).toEqual(['AMK-2210', 'BAC-1450']);
+  it('la búsqueda conserva el orden alfabético', () => {
+    const names = index.query({ text: 'a' }).items.map((p) => p.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base', numeric: true })));
   });
 
   it('busca por referencia, producto, marca y alternos, sin tildes ni mayúsculas', () => {

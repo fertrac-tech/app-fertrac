@@ -19,11 +19,11 @@ const products = [
 ];
 
 describe('SnapshotCatalogRepository', () => {
-  it('sincroniza, ordena por prioridad y guarda la copia local', async () => {
+  it('sincroniza, ordena alfabéticamente por Producto y guarda la copia local', async () => {
     const store = memoryStore();
     const repo = new SnapshotCatalogRepository({ fetchAll: async () => products }, store, () => 1234);
     expect(await repo.sync()).toEqual({ count: 3, syncedAt: 1234 });
-    expect((await repo.query({})).items.map((p) => p.ref)).toEqual(['B-1', 'A-1', 'Z-9']);
+    expect((await repo.query({})).items.map((p) => p.ref)).toEqual(['A-1', 'B-1', 'Z-9']); // ARANDELA, BOMBA, ZAPATA
     expect(store.current?.products).toHaveLength(3);
     expect(await repo.lastSyncedAt()).toBe(1234);
   });
