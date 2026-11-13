@@ -1,46 +1,10 @@
-# Staging: cada push a `main` publica la build de pre-producción en GitHub Pages del repo
-# (https://fertrac-tech.github.io/app-fertrac/). Producción (app.fertrac.com) se publica aparte y a mano.
-name: Deploy staging
+# RETIRADO: con app.fertrac.com en la raíz de este repo, el deploy de staging en /app-fertrac/
+# ya no aplica (un repo tiene un solo sitio de Pages). Se deja solo manual para no autodisparar.
+name: (retirado) Deploy staging
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-concurrency:
-  group: pages-staging
-  cancel-in-progress: true
 jobs:
-  build:
+  noop:
     runs-on: ubuntu-latest
-    environment: github-pages
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build:staging
-        env:
-          VITE_BASE_PATH: /app-fertrac/
-          # Se definen en Settings → Secrets and variables → Actions → Variables.
-          VITE_APPS_SCRIPT_URL: ${{ vars.STAGING_APPS_SCRIPT_URL || secrets.STAGING_APPS_SCRIPT_URL }}
-          VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_GOOGLE_CLIENT_ID || secrets.STAGING_GOOGLE_CLIENT_ID }}
-          VITE_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - run: echo "Workflow de staging retirado. Producción se publica con deploy.yml."
