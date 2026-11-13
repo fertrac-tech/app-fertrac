@@ -71,8 +71,8 @@ describe('photoUrlFrom', () => {
     expect(rowToProduct(row({ REF: 'X-1', FOTO: 'Sin Foto' }))?.photoUrl).toBeNull();
   });
   it('convierte enlaces de Drive en miniaturas públicas, como la v10', () => {
-    expect(photoUrlFrom('https://drive.google.com/open?id=1aB_c-9')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w400');
-    expect(photoUrlFrom('https://drive.google.com/file/d/1aB_c-9/view')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w400');
+    expect(photoUrlFrom('https://drive.google.com/open?id=1aB_c-9')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w200');
+    expect(photoUrlFrom('https://drive.google.com/file/d/1aB_c-9/view')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w200');
   });
   it('el mapa de fotos se consulta por referencia en mayúsculas', () => {
     expect(rowToProduct(row({ REF: 'amk-1' }), { 'AMK-1': 'https://drive.google.com/open?id=zz9' })?.photoUrl).toContain('id=zz9');

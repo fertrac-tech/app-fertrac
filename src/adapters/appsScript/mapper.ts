@@ -39,14 +39,15 @@ export function extractDriveId(value: string): string | null {
 
 /**
  * Convierte el valor de la columna FOTO (o del mapa de fotos) en una URL usable.
- * Drive → miniatura pública (igual que la v10); otra URL http(s) → tal cual;
+ * Drive → miniatura pública w200 (la v10 usa ese tamaño: Drive responde 404 si se pide
+ * un tamaño mayor que el archivo original); otra URL http(s) → tal cual;
  * textos como "Sin Foto" o vacíos → null (sin foto), nunca una ruta relativa.
  */
 export function photoUrlFrom(value: unknown): string | null {
   const raw = text(value);
   if (raw === '') return null;
   const id = extractDriveId(raw);
-  if (id) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w400`;
+  if (id) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w200`;
   return /^https?:\/\//i.test(raw) ? raw : null;
 }
 

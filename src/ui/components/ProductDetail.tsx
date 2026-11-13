@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, Icon, Logo, StockPill } from './primitives';
@@ -12,6 +14,28 @@ interface Props {
   onDismiss: () => void;
   onFavorite: () => void;
   overlay?: boolean;
+}
+
+/**
+ * Foto grande: pide la miniatura de Drive en w800 y, si Drive responde 404 (archivo más
+ * pequeño que el tamaño pedido), cae a la URL original (w200), como hacía la v10.
+ */
+function DetailPhoto({ url, alt }: { url: string; alt: string }) {
+  const [src, setSrc] = useState(() => withThumbSize(url, 800));
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setSrc(withThumbSize(url, 800));
+    setFailed(false);
+  }, [url]);
+  if (failed) return <Icon name="image" size={44} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      referrerPolicy="no-referrer"
+      onError={() => (src !== url ? setSrc(url) : setFailed(true))}
+    />
+  );
 }
 
 /**
@@ -42,7 +66,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
           <div className="detail__scroll">
             <div className="detail__photo">
               {product.photoUrl ? (
-                <img src={product.photoUrl} alt={`Foto de ${product.name}`} referrerPolicy="no-referrer" />
+                <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} />
               ) : (
                 <Icon name="image" size={44} />
               )}
