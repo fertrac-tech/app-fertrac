@@ -35,10 +35,35 @@ a propósito (`readConfig` exige la URL del backend y el cliente de Google).
 - [ ] Modo oscuro, fold abierto/cerrado y escritorio revisados por el equipo.
 - [ ] URL de la política de datos definida y texto validado por jurídica.
 
-## Corte a producción
+## Corte a producción (app.fertrac.com)
 
-1. Etiquetar la versión (`package.json` → `11.0.0`) y mergear a `release`.
-2. `npm run build` con `.env.production` y publicar `dist/` en `app.fertrac.com` (mismo origen que la v10:
-   los dispositivos aprobados se conservan).
-3. Conservar la v10 en una rama (`v10-legacy`) para volver atrás en minutos si hace falta.
-4. Después del corte: `ENFORCE_REVOCACION`/llave de transición dejan de usarse; la v2 solo envía token.
+`app.fertrac.com` lo sirve GitHub Pages desde `developments-fertrac/lista-precios-fertrac` (rama `main`, con `CNAME`).
+Un repositorio solo puede tener un sitio de Pages y el de `app-fertrac` ya es staging, así que producción se publica
+**compilada** en ese repositorio; el código fuente queda en `fertrac-tech/app-fertrac`.
+
+### Una sola vez
+1. En `lista-precios-fertrac`: crear la rama `v10-legacy` desde `main` (respaldo de la app anterior; vuelta atrás en minutos).
+2. Crear un token de GitHub con permiso de escritura de contenido sobre `lista-precios-fertrac` y guardarlo en
+   `app-fertrac` → Settings → Secrets → Actions como `PROD_DEPLOY_TOKEN`.
+3. En `app-fertrac` crear el environment `production` (opcional: con revisores obligatorios, para que nadie publique sin aprobación).
+4. Verificar en Google Cloud que `https://app.fertrac.com` sigue en los orígenes autorizados del cliente OAuth web (ya lo está para la v10).
+
+### Cada publicación
+1. Mergear `main` en `release` y hacer push. El workflow `deploy-production.yml` corre pruebas, compila con
+   `.env.production` y sube `dist/` + `CNAME` a `lista-precios-fertrac/main`. Pages publica en 1–3 minutos.
+2. Abrir https://app.fertrac.com en una ventana privada: sin etiqueta de entorno, login, catálogo, foto en detalle.
+3. En un teléfono con la app instalada: cerrar y abrir la app; debe mostrar la v2 sin reinstalar.
+
+### Qué pasa con la app anterior (v10)
+- La web v10 deja de existir en `app.fertrac.com` en el momento del push (sus archivos se reemplazan).
+- El APK instalado (`com.fertrac.listaprecios`) solo abre `https://app.fertrac.com/`, así que pasa a la v2 solo. No es
+  obligatorio reinstalar; el nuevo APK 2.0.0 es opcional (mismo paquete y misma firma).
+- El service worker de la v10 se reemplaza por el de la v2 (`sw.js`, mismo nombre) y se limpian sus cachés.
+- Sesión: la v2 no lee `fertrac_user`/`fertrac_token` de la v10; cada usuario inicia sesión con Google una vez.
+- Dispositivos: la v2 reutiliza `fertrac_device_id`, por lo que los dispositivos ya aprobados siguen aprobados.
+- La llave de transición (`ACCESS_KEY`) ya no se envía. Cuando ningún cliente v10 quede activo, poner
+  `CONFIG.ENFORCE_DISPOSITIVOS = true` en el Apps Script para que la llave deje de servir datos.
+- Backend (Apps Script, hojas, fotos, lista blanca): sin cambios.
+
+### Vuelta atrás
+En `lista-precios-fertrac`: `git checkout main && git reset --hard v10-legacy && git push --force`. Pages vuelve a la v10 en minutos.
