@@ -1,0 +1,41 @@
+# Producción: cada push a `release` compila la v2 con .env.production y publica el resultado en el
+# repositorio que sirve app.fertrac.com (developments-fertrac/lista-precios-fertrac, rama `main`).
+# El código fuente de la v2 vive aquí; allá solo van los archivos compilados + CNAME.
+name: Deploy production
+on:
+  push:
+    branches: [release]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages-production
+  cancel-in-progress: false
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_BASE_PATH: /
+          VITE_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+      - run: echo "app.fertrac.com" > dist/CNAME
+      - name: Publicar en el repositorio de app.fertrac.com
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          # Token clásico o fine-grained con permiso de contenido (escritura) sobre lista-precios-fertrac.
+          personal_token: ${{ secrets.PROD_DEPLOY_TOKEN }}
+          external_repository: developments-fertrac/lista-precios-fertrac
+          publish_branch: main
+          publish_dir: ./dist
+          force_orphan: false
+          commit_message: "Lista de Precios v2 ${{ github.sha }}"
