@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COL, parseCondition, parseNumber, rowsToProducts, rowToProduct } from './mapper';
+import { COL, parseCondition, parseNumber, photoUrlFrom, rowsToProducts, rowToProduct } from './mapper';
 
 function row(values: Partial<Record<keyof typeof COL, unknown>>): unknown[] {
   const r: unknown[] = Array.from({ length: 22 }, () => '');
@@ -38,18 +38,18 @@ describe('rowToProduct', () => {
         REF: ' AMK-2210 ', PRODUCTO: 'AMORTIGUADOR CABINA T800', MARCA: 'FERTRAC', LINEA: 'SUSPENSION',
         CATEGORIA: 'Suspensión cabina', APLICACION: 'Tractocamión T800', ALTERNOS: 'AMK-2210A, 85-1021',
         PRECIO_BRUTO: 412000, NETO_5: 391400, NETO_8: 379040, PRECIO_PROMO: '', INV: '18', CONDICION: 'NUEVAS',
-        FOTO: 'https://drive/fallback',
+        FOTO: 'https://cdn.fertrac.com/fotos/amk-2210.jpg',
       }),
     );
     expect(p).toMatchObject({
       ref: 'AMK-2210', name: 'AMORTIGUADOR CABINA T800', brand: 'FERTRAC', condition: 'NUEVO', stock: 18,
-      prices: { gross: 412000, net5: 391400, net8: 379040, promo: null }, photoUrl: 'https://drive/fallback',
+      prices: { gross: 412000, net5: 391400, net8: 379040, promo: null }, photoUrl: 'https://cdn.fertrac.com/fotos/amk-2210.jpg',
     });
   });
 
   it('prefiere la foto del mapa de fotos y tolera inventario vacío o negativo', () => {
-    const p = rowToProduct(row({ REF: 'X-1', INV: '', FOTO: 'col-b' }), { 'X-1': 'mapa' });
-    expect(p?.photoUrl).toBe('mapa');
+    const p = rowToProduct(row({ REF: 'X-1', INV: '', FOTO: 'https://col-b' }), { 'X-1': 'https://mapa' });
+    expect(p?.photoUrl).toBe('https://mapa');
     expect(p?.stock).toBe(0);
     expect(rowToProduct(row({ REF: 'X-2', INV: -4 }))?.stock).toBe(0);
   });
@@ -60,6 +60,22 @@ describe('rowToProduct', () => {
 
   it('descarta filas sin referencia', () => {
     expect(rowToProduct(row({ PRODUCTO: 'SIN REF' }))).toBeNull();
+  });
+});
+
+describe('photoUrlFrom', () => {
+  it('"Sin Foto" y vacíos no generan URL (evita peticiones 404 a rutas relativas)', () => {
+    expect(photoUrlFrom('Sin Foto')).toBeNull();
+    expect(photoUrlFrom('')).toBeNull();
+    expect(photoUrlFrom(null)).toBeNull();
+    expect(rowToProduct(row({ REF: 'X-1', FOTO: 'Sin Foto' }))?.photoUrl).toBeNull();
+  });
+  it('convierte enlaces de Drive en miniaturas públicas, como la v10', () => {
+    expect(photoUrlFrom('https://drive.google.com/open?id=1aB_c-9')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w400');
+    expect(photoUrlFrom('https://drive.google.com/file/d/1aB_c-9/view')).toBe('https://drive.google.com/thumbnail?id=1aB_c-9&sz=w400');
+  });
+  it('el mapa de fotos se consulta por referencia en mayúsculas', () => {
+    expect(rowToProduct(row({ REF: 'amk-1' }), { 'AMK-1': 'https://drive.google.com/open?id=zz9' })?.photoUrl).toContain('id=zz9');
   });
 });
 

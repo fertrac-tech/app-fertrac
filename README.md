@@ -20,7 +20,7 @@ Cada entorno muestra una etiqueta (DEMO / STAGING) y guarda sus datos locales en
 ## Calidad
 
 ```
-npm test          # 171 pruebas (dominio, adaptadores, sesión/seguridad, UI)
+npm test          # 174 pruebas (dominio, adaptadores, sesión/seguridad, UI)
 npm run typecheck
 npm run verify    # typecheck + pruebas + build
 ```

@@ -32,6 +32,24 @@ export function parseCondition(value: unknown): Condition {
   return 'NORMAL';
 }
 
+/** Extrae el id de archivo de una URL de Google Drive (…?id=X o …/d/X/…). */
+export function extractDriveId(value: string): string | null {
+  return /[?&]id=([A-Za-z0-9_-]+)/.exec(value)?.[1] ?? /\/d\/([A-Za-z0-9_-]+)/.exec(value)?.[1] ?? null;
+}
+
+/**
+ * Convierte el valor de la columna FOTO (o del mapa de fotos) en una URL usable.
+ * Drive → miniatura pública (igual que la v10); otra URL http(s) → tal cual;
+ * textos como "Sin Foto" o vacíos → null (sin foto), nunca una ruta relativa.
+ */
+export function photoUrlFrom(value: unknown): string | null {
+  const raw = text(value);
+  if (raw === '') return null;
+  const id = extractDriveId(raw);
+  if (id) return `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w400`;
+  return /^https?:\/\//i.test(raw) ? raw : null;
+}
+
 function parsePromo(value: unknown): number | string | null {
   const numeric = parseNumber(value);
   if (numeric !== null) return numeric;
@@ -62,7 +80,7 @@ export function rowToProduct(row: CatalogRow, photos: Readonly<Record<string, st
       promo: parsePromo(row[COL.PRECIO_PROMO]),
     },
     promoEnds: text(row[COL.PROMO_FIN]) || null,
-    photoUrl: photos[ref] || text(row[COL.FOTO]) || null,
+    photoUrl: photoUrlFrom(photos[ref] ?? photos[ref.toUpperCase()]) ?? photoUrlFrom(row[COL.FOTO]),
   };
 }
 

@@ -74,21 +74,21 @@ describe('AppsScriptClient', () => {
 
 describe('AppsScriptCatalogSource', () => {
   const header = Array.from({ length: 22 }, () => 'H');
-  const rowA = ['A-1', 'foto-col-b', '', 'PRODUCTO A', '', '', '', '', 'FERTRAC', '', 1000, 950, 920, '', '', '', '', '', 3, '', '', 'NUEVAS'];
+  const rowA = ['A-1', 'https://foto-col-b', '', 'PRODUCTO A', '', '', '', '', 'FERTRAC', '', 1000, 950, 920, '', '', '', '', '', 3, '', '', 'NUEVAS'];
 
   it('combina catálogo y mapa de fotos', async () => {
     const fetchFn: typeof fetch = async (url) =>
-      String(url).includes('fotos=1') ? json({ ok: true, fotos: { 'A-1': 'foto-mapa' } }) : json({ data: [header, rowA] });
+      String(url).includes('fotos=1') ? json({ ok: true, fotos: { 'A-1': 'https://foto-mapa' } }) : json({ data: [header, rowA] });
     const products = await new AppsScriptCatalogSource(makeClient(fetchFn)).fetchAll();
     expect(products).toHaveLength(1);
-    expect(products[0]).toMatchObject({ ref: 'A-1', condition: 'NUEVO', stock: 3, photoUrl: 'foto-mapa' });
+    expect(products[0]).toMatchObject({ ref: 'A-1', condition: 'NUEVO', stock: 3, photoUrl: 'https://foto-mapa' });
   });
 
   it('si fallan las fotos, el catálogo carga igual', async () => {
     const fetchFn: typeof fetch = async (url) =>
       String(url).includes('fotos=1') ? json({ error: 'error' }) : json({ data: [header, rowA] });
     const products = await new AppsScriptCatalogSource(makeClient(fetchFn)).fetchAll();
-    expect(products[0]?.photoUrl).toBe('foto-col-b');
+    expect(products[0]?.photoUrl).toBe('https://foto-col-b');
   });
 
   it('propaga el rechazo de acceso del catálogo', async () => {
