@@ -20,21 +20,42 @@ interface Props {
  * Foto grande: pide la miniatura de Drive en w800 y, si Drive responde 404 (archivo más
  * pequeño que el tamaño pedido), cae a la URL original (w200), como hacía la v10.
  */
-function DetailPhoto({ url, alt }: { url: string; alt: string }) {
-  const [src, setSrc] = useState(() => withThumbSize(url, 800));
+function useDriveImage(url: string, size: number) {
+  const [src, setSrc] = useState(() => withThumbSize(url, size));
   const [failed, setFailed] = useState(false);
   useEffect(() => {
-    setSrc(withThumbSize(url, 800));
+    setSrc(withThumbSize(url, size));
     setFailed(false);
-  }, [url]);
+  }, [url, size]);
+  const onError = () => (src !== url ? setSrc(url) : setFailed(true));
+  return { src, failed, onError };
+}
+
+function DetailPhoto({ url, alt, onZoom }: { url: string; alt: string; onZoom: () => void }) {
+  const { src, failed, onError } = useDriveImage(url, 800);
   if (failed) return <Icon name="image" size={44} />;
   return (
-    <img
-      src={src}
-      alt={alt}
-      referrerPolicy="no-referrer"
-      onError={() => (src !== url ? setSrc(url) : setFailed(true))}
-    />
+    <button type="button" className="detail__zoom" aria-label="Ampliar foto" onClick={onZoom}>
+      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} />
+    </button>
+  );
+}
+
+/** Foto ampliada en un diálogo centrado; cierra con Escape, el botón o tocando fuera. */
+function PhotoDialog({ url, alt, onClose }: { url: string; alt: string; onClose: () => void }) {
+  const { src, onError } = useDriveImage(url, 1600);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => event.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="lightbox" role="dialog" aria-modal="true" aria-label={alt} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <button type="button" className="icon-btn lightbox__close" aria-label="Cerrar foto" onClick={onClose}>
+        <Icon name="close" size={24} />
+      </button>
+      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} />
+    </div>
   );
 }
 
@@ -43,6 +64,8 @@ function DetailPhoto({ url, alt }: { url: string; alt: string }) {
  * el logo permanece en la barra del detalle y junto al bloque "Precios".
  */
 export function ProductDetail({ product, loading, alias, favorite, dismiss, onDismiss, onFavorite, overlay }: Props) {
+  const [zoom, setZoom] = useState(false);
+  useEffect(() => setZoom(false), [product?.ref]);
   return (
     <aside className={`detail ${overlay ? 'detail--overlay' : ''}`} aria-label="Detalle de producto">
       <header className="detail__bar">
@@ -66,7 +89,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
           <div className="detail__scroll">
             <div className="detail__photo">
               {product.photoUrl ? (
-                <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} />
+                <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} onZoom={() => setZoom(true)} />
               ) : (
                 <Icon name="image" size={44} />
               )}
@@ -127,6 +150,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
               </dl>
             </div>
           </div>
+          {zoom && product.photoUrl && <PhotoDialog url={product.photoUrl} alt={`Foto de ${product.name}`} onClose={() => setZoom(false)} />}
           <div className="detail__action">
             <button type="button" className="btn btn--primary btn--block" onClick={onFavorite}>
               <Icon name="star" size={18} /> {favorite ? 'Editar favorito' : 'Guardar en favoritos'}

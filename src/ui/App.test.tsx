@@ -131,6 +131,18 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     expect(logos).toEqual(['principal', 'mono']);
   });
 
+  it('la foto se amplía en un diálogo centrado y se cierra', async () => {
+    const { container } = renderApp({ route: '/?ref=AMK-2210' });
+    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
+    await within(detail).findByRole('heading', { name: 'AMORTIGUADOR CABINA T800' });
+    expect((await container.catalog.get('AMK-2210'))?.photoUrl).toContain('sz=w200');
+    await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
+    const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
+    expect(within(dialog).getByRole('img')).toHaveAttribute('src', expect.stringContaining('sz=w1600'));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar foto' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('en móvil el detalle vuelve a la lista conservando la página', async () => {
     renderApp({ route: '/?p=2' });
     await screen.findByRole('list', { name: 'Productos' });
