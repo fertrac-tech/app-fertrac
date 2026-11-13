@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { countByList, totalFavorites } from '@/domain/favorites';
 import { formatSyncTime } from '@/domain/text';
@@ -65,11 +65,14 @@ function BottomNav() {
 }
 
 /** Riel de navegación (fold abierto / tablet). */
-function Rail() {
+function Rail({ onToggle, onNewList }: { onToggle: () => void; onNewList?: () => void }) {
   const { session } = useReady();
   return (
     <nav className="rail" aria-label="Navegación principal">
       <Logo variant="isotipo" height={44} />
+      <button type="button" className="icon-btn" aria-label="Expandir barra de navegación" onClick={onToggle} style={{ alignSelf: 'center' }}>
+        <Icon name="right" size={20} />
+      </button>
       <span style={{ height: 12 }} />
       {NAV.map((item) => (
         <NavLink key={item.to} to={item.to} end={item.to === '/'}>
@@ -77,6 +80,11 @@ function Rail() {
           {item.label}
         </NavLink>
       ))}
+      {onNewList && (
+        <button type="button" className="icon-btn" aria-label="Nueva lista" onClick={onNewList} style={{ alignSelf: 'center' }}>
+          <Icon name="plus" size={20} />
+        </button>
+      )}
       <span className="rail__spacer" />
       <ThemeToggle />
       <SyncButton />
@@ -88,7 +96,7 @@ function Rail() {
 }
 
 /** Barra lateral (escritorio) con acceso directo a las listas del usuario. */
-function Sidebar({ onNewList }: { onNewList: () => void }) {
+function Sidebar({ onNewList, onToggle }: { onNewList: () => void; onToggle: () => void }) {
   const { session } = useContainer();
   const state = useReady();
   const favorites = useFavoritesState();
@@ -99,9 +107,14 @@ function Sidebar({ onNewList }: { onNewList: () => void }) {
 
   return (
     <nav className="sidebar" aria-label="Navegación principal">
-      <div className="sidebar__brand">
-        <Logo height={44} />
-        Lista de Precios
+      <div className="sidebar__brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo height={44} />
+          Lista de Precios
+        </span>
+        <button type="button" className="icon-btn" aria-label="Recortar barra de navegación" onClick={onToggle}>
+          <Icon name="left" size={20} />
+        </button>
       </div>
       <NavLink to="/" end className="navitem">
         <Icon name="list" /> Catálogo
@@ -144,11 +157,25 @@ export function Shell() {
   const state = useReady();
   const navigate = useNavigate();
   const [creatingList, setCreatingList] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    try {
+      const stored = window.localStorage.getItem('fertrac_nav_collapsed');
+      if (stored !== null) return stored === '1';
+      return true;
+    } catch { return true; }
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('fertrac_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* noop */ }
+  }, [navCollapsed]);
 
   return (
-    <div className="shell" data-breakpoint={breakpoint}>
-      {breakpoint === 'expanded' && <Sidebar onNewList={() => setCreatingList(true)} />}
-      {breakpoint === 'medium' && <Rail />}
+    <div className="shell" data-breakpoint={breakpoint} data-nav-collapsed={navCollapsed}>
+      {breakpoint === 'expanded' && (navCollapsed
+        ? <Rail onToggle={() => setNavCollapsed(false)} onNewList={() => setCreatingList(true)} />
+        : <Sidebar onNewList={() => setCreatingList(true)} onToggle={() => setNavCollapsed(true)} />)}
+      {breakpoint === 'medium' && (navCollapsed
+        ? <Rail onToggle={() => setNavCollapsed(false)} onNewList={() => setCreatingList(true)} />
+        : <Sidebar onNewList={() => setCreatingList(true)} onToggle={() => setNavCollapsed(true)} />)}
       <div className="shell__main">
         {breakpoint === 'compact' && <AppBar />}
         {state.syncError && (

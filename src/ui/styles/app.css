@@ -416,6 +416,22 @@ p {
   display: flex;
   flex-direction: column;
 }
+.nav-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 40;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+}
 .appbar {
   flex: none;
   display: flex;
@@ -947,10 +963,14 @@ p {
   --cols: 40px minmax(110px, 0.7fr) minmax(90px, 0.6fr) minmax(200px, 2fr) 84px 96px minmax(110px, 0.6fr) 36px;
 }
 .table[data-compact='true'] {
-  --cols: 40px minmax(100px, 0.7fr) minmax(80px, 0.6fr) minmax(160px, 2fr) 96px minmax(104px, 0.6fr) 36px;
+  --cols: 40px minmax(96px, 0.7fr) minmax(72px, 0.6fr) minmax(150px, 2fr) 72px 84px minmax(96px, 0.6fr) 36px;
+  column-gap: 8px;
+  overflow-x: auto;
 }
-.table[data-compact='true'] .col-condition {
-  display: none;
+.table[data-compact='true'] .table__head,
+.table[data-compact='true'] .row {
+  padding: 0 12px 0 16px;
+  column-gap: 8px;
 }
 .table__head {
   flex: none;

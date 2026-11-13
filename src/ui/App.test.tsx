@@ -174,10 +174,10 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
     expect(screen.getByRole('list', { name: 'Productos' })).toBeInTheDocument();
   });
 
-  it('escritorio: barra lateral y tabla con el logo en el encabezado después de "Producto"', async () => {
+  it('escritorio: riel y tabla con el logo en el encabezado después de "Producto"', async () => {
     renderApp({ viewport: 'expanded' });
     const table = await screen.findByRole('table', { name: 'Productos' });
-    expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toHaveClass('sidebar');
+    expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toHaveClass('rail');
     const header = within(table).getByRole('columnheader', { name: /Producto/ });
     expect(within(header).getByRole('img', { name: 'Fertrac' })).toBeInTheDocument();
     expect(within(table).getAllByRole('row')).toHaveLength(101);
@@ -269,6 +269,7 @@ describe('Favoritos (pantallas 05 y 06)', () => {
   it('escritorio: tarjetas de "Mis listas" con vista previa y acceso desde la barra lateral', async () => {
     const { container } = renderApp({ route: '/favoritos', viewport: 'expanded' });
     await screen.findByRole('heading', { name: 'Favoritos' });
+    await userEvent.click(screen.getByRole('button', { name: /Expandir barra de navegación/ }));
     container.favorites.saveFavorite('AMK-2210', 'Amortiguador Kenworth', [container.favorites.createList('Clientes Bogotá')]);
     const nav = screen.getByRole('navigation', { name: 'Navegación principal' });
     expect(await within(nav).findByRole('link', { name: /Clientes Bogotá\s*1/ })).toBeInTheDocument();
