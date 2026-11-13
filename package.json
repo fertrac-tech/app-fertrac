@@ -1,0 +1,47 @@
+{
+  "name": "lista-precios-fertrac-v2",
+  "private": true,
+  "version": "11.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode mock",
+    "dev:staging": "vite --mode staging",
+    "build": "tsc --noEmit && vite build && node scripts/spa-fallback.mjs",
+    "build:staging": "tsc --noEmit && vite build --mode staging && node scripts/spa-fallback.mjs",
+    "build:mock": "tsc --noEmit && vite build --mode mock && node scripts/spa-fallback.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run test && npm run build:mock",
+    "preview:mock": "npm run build:mock && vite preview",
+    "preview:staging": "npm run build:staging && vite preview"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
+    "idb-keyval": "^6.3.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.10",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.0",
+    "fake-indexeddb": "^6.2.8",
+    "jsdom": "^31.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
