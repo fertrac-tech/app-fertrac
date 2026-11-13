@@ -24,6 +24,7 @@
   --stock-none: #a32330;
   --stock-none-soft: #f8d7da;
   --scrim: rgb(31 35 40 / 0.7);
+  --wm-opacity: 0.14;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -58,5 +59,6 @@
   --stock-none: #f28b95;
   --stock-none-soft: #3f151a;
   --scrim: rgb(0 0 0 / 0.7);
+  --wm-opacity: 0.2;
   color-scheme: dark;
 }

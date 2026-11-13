@@ -706,6 +706,25 @@ p {
   border-radius: var(--radius-md);
   background: var(--bg-surface);
 }
+/* Marca de agua (solo escritorio): el logo va dentro de cada fila de la tabla, detrás del
+   contenido, para que cualquier recorte o captura conserve la identidad de Fertrac.
+   Las tarjetas de móvil y fold no la llevan. No recibe clics. */
+.row {
+  isolation: isolate;
+}
+.row::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  /* Tres columnas de logos por fila: izquierda, centro y derecha. */
+  background:
+    url('../../assets/brand/logo3.png') 15% center / auto 38px no-repeat,
+    url('../../assets/brand/logo3.png') 50% center / auto 38px no-repeat,
+    url('../../assets/brand/logo3.png') 85% center / auto 38px no-repeat;
+  opacity: var(--wm-opacity);
+  pointer-events: none;
+}
 .card[data-selected='true'] {
   border-color: var(--brand-primary);
   box-shadow: 0 0 0 1px var(--brand-primary);
