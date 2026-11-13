@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
-import { ConditionPill, FavButton, Icon, Logo, StockPill } from './primitives';
+import { ConditionPill, FavButton, Icon, Logo, PromoColorTag, StockPill } from './primitives';
 
 interface Props {
   product: Product | undefined;
@@ -150,6 +150,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
               <div className="detail__pills">
                 <ConditionPill condition={product.condition} large />
                 <StockPill stock={product.stock} long large />
+                <PromoColorTag color={product.promoColor} />
               </div>
               <h2 className="detail__name">{alias || product.name}</h2>
               <p className="detail__sub">
@@ -179,6 +180,12 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
                   <span>Precio promo</span>
                   <strong>{formatPrice(product.prices.promo)}</strong>
                 </div>
+                {product.conditionText && (
+                  <div className="price price--condition" data-color={product.promoColor ?? undefined}>
+                    <span>Condición</span>
+                    <strong>{product.conditionText}</strong>
+                  </div>
+                )}
               </div>
 
               <dl className="facts">

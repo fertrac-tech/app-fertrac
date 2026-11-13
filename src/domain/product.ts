@@ -2,6 +2,21 @@
 
 export type Condition = 'NUEVO' | 'PROMO' | 'NORMAL';
 
+/**
+ * Colores con los que negocio distingue cada promoción en la columna CONDICIÓN
+ * (p. ej. "Magenta"). Claves normalizadas: minúsculas y sin tildes.
+ */
+export const PROMO_COLORS = [
+  'magenta', 'fucsia', 'rosado', 'rosa', 'rojo', 'naranja', 'amarillo', 'dorado', 'verde',
+  'turquesa', 'cian', 'celeste', 'azul', 'morado', 'violeta', 'lila', 'gris',
+] as const;
+export type PromoColor = (typeof PROMO_COLORS)[number];
+
+/** Nombre visible del color: primera letra en mayúscula ("Magenta"). */
+export function promoColorLabel(color: PromoColor): string {
+  return color.charAt(0).toUpperCase() + color.slice(1);
+}
+
 export interface ProductPrices {
   gross: number | null;
   net5: number | null;
@@ -21,6 +36,13 @@ export interface Product {
   application: string;
   alternates: string;
   condition: Condition;
+  /**
+   * Color de la promoción cuando CONDICIÓN nombra uno. Opcional: las copias del catálogo
+   * guardadas en el dispositivo antes de este campo no lo traen hasta la siguiente sincronización.
+   */
+  promoColor?: PromoColor | null;
+  /** Texto de CONDICIÓN tal como viene en la hoja; null si está vacío o es "NO TIENE". Opcional por la misma razón. */
+  conditionText?: string | null;
   stock: number;
   prices: ProductPrices;
   promoEnds: string | null;

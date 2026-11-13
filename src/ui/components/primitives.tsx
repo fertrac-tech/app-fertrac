@@ -3,7 +3,7 @@ import isotipo from '@/assets/brand/isotipo.png';
 import logoPrincipal from '@/assets/brand/logo.png';
 import logoNegativo from '@/assets/brand/logo2.png';
 import logoMono from '@/assets/brand/logo3.png';
-import { stockLevel, type Condition } from '@/domain/product';
+import { promoColorLabel, stockLevel, type Condition, type PromoColor } from '@/domain/product';
 import { initials } from '@/domain/text';
 import { useTheme } from '../context';
 
@@ -51,6 +51,17 @@ export function StockPill({ stock, long = false, large = false }: { stock: numbe
   const level = stockLevel(stock);
   const label = level === 'none' ? 'Sin stock' : `${stock} und${long ? ' disponibles' : ''}`;
   return <span className={`pill pill--${level} ${large ? 'pill--lg' : ''}`}>{label}</span>;
+}
+
+/** Color de la promoción: círculo del color con la inicial en mayúscula. Va después del inventario. */
+export function PromoColorTag({ color }: { color?: PromoColor | null }) {
+  if (!color) return null;
+  const label = promoColorLabel(color);
+  return (
+    <span className="promo-color" data-color={color} role="img" aria-label={`Promoción ${label}`} title={`Promoción ${label}`}>
+      {label.charAt(0)}
+    </span>
+  );
 }
 
 export function ConditionPill({ condition, large = false }: { condition: Condition; large?: boolean }) {

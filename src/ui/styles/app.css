@@ -135,6 +135,52 @@ p {
   background: var(--stock-none-soft);
   color: var(--stock-none);
 }
+/* Color de la promoción (columna CONDICIÓN): `data-color` define --c; lo usan la etiqueta
+   de inventario y la tarjeta "Condición" del detalle. */
+.promo-color,
+.price--condition {
+  --c: var(--text-secondary);
+}
+/* Etiqueta: círculo del color con la inicial en mayúscula, después del inventario. */
+.promo-color {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--c);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Colores claros: la inicial va oscura para que se lea. */
+.promo-color[data-color='amarillo'],
+.promo-color[data-color='dorado'],
+.promo-color[data-color='celeste'],
+.promo-color[data-color='lila'],
+.promo-color[data-color='rosado'],
+.promo-color[data-color='rosa'] {
+  color: #1f2328;
+}
+[data-color='magenta'] { --c: #e6007e; }
+[data-color='fucsia'] { --c: #d81b78; }
+[data-color='rosado'],
+[data-color='rosa'] { --c: #f06292; }
+[data-color='rojo'] { --c: #d32f2f; }
+[data-color='naranja'] { --c: #f47920; }
+[data-color='amarillo'] { --c: #f2c200; }
+[data-color='dorado'] { --c: #c99a00; }
+[data-color='verde'] { --c: #2e9d4f; }
+[data-color='turquesa'] { --c: #12a79d; }
+[data-color='cian'] { --c: #00a8d6; }
+[data-color='celeste'] { --c: #4fb3e8; }
+[data-color='azul'] { --c: #1e6fd0; }
+[data-color='morado'] { --c: #7b3fb5; }
+[data-color='violeta'] { --c: #8e4ec6; }
+[data-color='lila'] { --c: #b08ad8; }
+[data-color='gris'] { --c: #7d8590; }
 .btn {
   display: inline-flex;
   align-items: center;
@@ -974,6 +1020,12 @@ p {
 .row[data-selected='true'] {
   box-shadow: inset 0 0 0 9999px rgb(244 121 32 / 0.08);
 }
+.row__inv {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .row__ref {
   font-weight: 600;
 }
@@ -1145,6 +1197,7 @@ p {
 .detail__pills {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 .detail__name {
@@ -1186,6 +1239,14 @@ p {
   font-size: 16px;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+/* Tarjeta "Condición": ocupa el ancho de la sección y lleva el color de la promoción. */
+.price--condition {
+  grid-column: 1 / -1;
+  border-left: 4px solid var(--c);
+}
+.price--condition strong {
+  color: color-mix(in srgb, var(--c) 70%, var(--text-primary));
 }
 .price--main {
   background: var(--brand-primary-soft);

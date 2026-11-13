@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { pageWindow, type PageInfo } from '@/domain/pagination';
 import { priorityTier, type Product } from '@/domain/product';
 import { formatCount, formatPrice } from '@/domain/text';
-import { ConditionPill, FavButton, Icon, Logo, StockPill, Thumb } from './primitives';
+import { ConditionPill, FavButton, Icon, Logo, PromoColorTag, StockPill, Thumb } from './primitives';
 
 export interface ProductItem {
   product: Product;
@@ -45,6 +45,7 @@ export function ProductCards({ items, selectedRef, isFavorite, onOpen, onFavorit
                   <span className="card__price">{formatPrice(product.prices.gross)}</span>
                   <span className="card__inv">
                     <StockPill stock={product.stock} />
+                    <PromoColorTag color={product.promoColor} />
                     <FavButton active={favorite} label={favLabel(favorite, product.name)} onClick={() => onFavorite(product.ref)} />
                   </span>
                 </div>
@@ -89,7 +90,10 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
               <span role="cell" className="row__cond col-condition" data-condition={product.condition}>
                 {product.condition === 'NORMAL' ? '—' : product.condition}
               </span>
-              <span role="cell"><StockPill stock={product.stock} /></span>
+              <span role="cell" className="row__inv">
+                <StockPill stock={product.stock} />
+                <PromoColorTag color={product.promoColor} />
+              </span>
               <span role="cell" className="row__price">{formatPrice(product.prices.gross)}</span>
               <span role="cell">
                 <FavButton active={favorite} label={favLabel(favorite, product.name)} onClick={() => onFavorite(product.ref)} />

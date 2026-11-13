@@ -1,4 +1,4 @@
-import type { Condition, Product } from '@/domain/product';
+import { PROMO_COLORS, type Condition, type PromoColor, type Product } from '@/domain/product';
 import { normalize } from '@/domain/text';
 
 /** Índices de columnas de la fila que entrega el Apps Script (Hoja2). */
@@ -25,10 +25,24 @@ export function parseNumber(value: unknown): number | null {
   return Number(candidate);
 }
 
+/** Color de promoción si CONDICIÓN nombra uno ("Magenta", "PROMO AZUL"…); null en otro caso. */
+export function parsePromoColor(value: unknown): PromoColor | null {
+  const words = normalize(text(value)).split(/[^a-z]+/);
+  return PROMO_COLORS.find((color) => words.includes(color)) ?? null;
+}
+
+/** Texto de CONDICIÓN para mostrar; null cuando la hoja no define condición (vacío o "NO TIENE"). */
+export function parseConditionText(value: unknown): string | null {
+  const raw = text(value);
+  const c = normalize(raw);
+  return c === '' || c === 'no tiene' ? null : raw;
+}
+
+/** Una condición que nombra un color es una promoción: el color identifica cuál. */
 export function parseCondition(value: unknown): Condition {
   const c = normalize(text(value));
   if (c.startsWith('nuev')) return 'NUEVO';
-  if (c.includes('promo')) return 'PROMO';
+  if (c.includes('promo') || parsePromoColor(value)) return 'PROMO';
   return 'NORMAL';
 }
 
@@ -73,6 +87,8 @@ export function rowToProduct(row: CatalogRow, photos: Readonly<Record<string, st
     application: text(row[COL.APLICACION]) === '0' ? '' : text(row[COL.APLICACION]),
     alternates: text(row[COL.ALTERNOS]),
     condition: parseCondition(row[COL.CONDICION]),
+    promoColor: parsePromoColor(row[COL.CONDICION]),
+    conditionText: parseConditionText(row[COL.CONDICION]),
     stock: Math.max(0, parseNumber(row[COL.INV]) ?? 0),
     prices: {
       gross: parseNumber(row[COL.PRECIO_BRUTO]),

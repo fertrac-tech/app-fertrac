@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COL, parseCondition, parseNumber, photoUrlFrom, rowsToProducts, rowToProduct } from './mapper';
+import { COL, parseCondition, parseConditionText, parseNumber, parsePromoColor, photoUrlFrom, rowsToProducts, rowToProduct } from './mapper';
 
 function row(values: Partial<Record<keyof typeof COL, unknown>>): unknown[] {
   const r: unknown[] = Array.from({ length: 22 }, () => '');
@@ -28,6 +28,29 @@ describe('parseCondition', () => {
     expect(parseCondition('Promoción')).toBe('PROMO');
     expect(parseCondition('')).toBe('NORMAL');
     expect(parseCondition('LIQUIDACION')).toBe('NORMAL');
+  });
+
+  it('una condición que nombra un color es una promoción de ese color', () => {
+    expect(parseCondition('Magenta')).toBe('PROMO');
+    expect(parsePromoColor('Magenta')).toBe('magenta');
+    expect(parsePromoColor(' PROMO AZUL ')).toBe('azul');
+    expect(parsePromoColor('PROMOCION')).toBeNull();
+    expect(parsePromoColor('NUEVAS')).toBeNull();
+    expect(parsePromoColor('')).toBeNull();
+  });
+
+  it('el texto de la condición se conserva salvo que sea vacío o "NO TIENE"', () => {
+    expect(parseConditionText(' Magenta ')).toBe('Magenta');
+    expect(parseConditionText('NUEVAS')).toBe('NUEVAS');
+    expect(parseConditionText('NO TIENE')).toBeNull();
+    expect(parseConditionText('No tiene')).toBeNull();
+    expect(parseConditionText('')).toBeNull();
+    expect(parseCondition('NO TIENE')).toBe('NORMAL');
+  });
+
+  it('el producto conserva el color de su promoción', () => {
+    const p = rowToProduct(row({ REF: '4089757-MCBEE', CONDICION: 'Magenta', INV: 20 }));
+    expect(p).toMatchObject({ condition: 'PROMO', promoColor: 'magenta', conditionText: 'Magenta', stock: 20 });
   });
 });
 

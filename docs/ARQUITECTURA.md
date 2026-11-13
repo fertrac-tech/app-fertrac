@@ -57,7 +57,8 @@ barra lateral, login y Perfil) y la elección se recuerda en el dispositivo.
   "Sincronizar". Validar en staging si se requiere renovación automática como en la v10.
 - **Favoritos** se guardan en el dispositivo (decisión de esta fase): no se sincronizan entre dispositivos.
 - **Inventario bajo**: la etiqueta amarilla aplica con menos de 10 unidades (`LOW_STOCK_THRESHOLD`). Por validar.
-- **Promoción** se determina por la columna CONDICIÓN (contiene "PROMO"), no por tener precio promo.
+- **Promoción** se determina por la columna CONDICIÓN, no por tener precio promo: contiene "PROMO" o nombra un
+  color ("Magenta", "Azul"…). El color distingue cada promoción y se muestra después del inventario (`PROMO_COLORS`).
 - **Política de datos**: falta la URL oficial (`VITE_PRIVACY_POLICY_URL`) y la validación jurídica del texto.
 - Íconos: 12 provienen del Figma; los demás (cerrar, lápiz, papelera, carpeta, etc.) se dibujaron en el mismo
   estilo porque el plan Starter de Figma agotó su cupo de exportación.
