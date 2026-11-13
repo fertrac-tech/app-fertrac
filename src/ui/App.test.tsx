@@ -139,6 +139,7 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
     const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
     expect(within(dialog).getByRole('img')).toHaveAttribute('src', expect.stringContaining('sz=w1600'));
+    expect(within(dialog).getByRole('button', { name: 'Descargar foto' })).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar foto' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

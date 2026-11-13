@@ -42,8 +42,38 @@ function DetailPhoto({ url, alt, onZoom }: { url: string; alt: string; onZoom: (
   );
 }
 
-/** Foto ampliada en un diálogo centrado; cierra con Escape, el botón o tocando fuera. */
-function PhotoDialog({ url, alt, onClose }: { url: string; alt: string; onClose: () => void }) {
+const IMAGE_EXTENSION: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+  'image/svg+xml': 'svg',
+};
+
+/** Descarga la foto con su nombre de archivo; si el origen no permite CORS, la abre aparte. */
+async function downloadImage(src: string, fileName: string) {
+  try {
+    const response = await fetch(src, { mode: 'cors', credentials: 'omit' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const mime = blob.type.split(';')[0] ?? '';
+    if (!mime.startsWith('image/')) throw new Error('El origen no devolvió una imagen');
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = `${fileName}.${IMAGE_EXTENSION[mime] ?? 'jpg'}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+  } catch {
+    window.open(src, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/** Foto ampliada en una card centrada; cierra con Escape, el botón o tocando fuera. */
+function PhotoDialog({ url, alt, fileName, onClose }: { url: string; alt: string; fileName: string; onClose: () => void }) {
   const { src, onError } = useDriveImage(url, 1600);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -60,10 +90,22 @@ function PhotoDialog({ url, alt, onClose }: { url: string; alt: string; onClose:
   // (en móvil `.detail--overlay` tiene z-index propio) y siempre cubre el texto.
   return createPortal(
     <div className="lightbox" role="dialog" aria-modal="true" aria-label={alt} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <button ref={closeRef} type="button" className="icon-btn lightbox__close" aria-label="Cerrar foto" onClick={onClose}>
-        <Icon name="close" size={24} />
-      </button>
-      <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} onClick={onClose} />
+      <div className="lightbox__card">
+        <header className="lightbox__head">
+          <strong className="lightbox__title">{alt}</strong>
+          <div className="lightbox__actions">
+            <button type="button" className="icon-btn" aria-label="Descargar foto" title="Descargar foto" onClick={() => void downloadImage(src, fileName)}>
+              <Icon name="download" size={20} />
+            </button>
+            <button ref={closeRef} type="button" className="icon-btn" aria-label="Cerrar foto" title="Cerrar" onClick={onClose}>
+              <Icon name="close" size={22} />
+            </button>
+          </div>
+        </header>
+        <div className="lightbox__body">
+          <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} onClick={onClose} />
+        </div>
+      </div>
     </div>,
     document.body,
   );
@@ -160,7 +202,14 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
               </dl>
             </div>
           </div>
-          {zoom && product.photoUrl && <PhotoDialog url={product.photoUrl} alt={`Foto de ${product.name}`} onClose={() => setZoom(false)} />}
+          {zoom && product.photoUrl && (
+            <PhotoDialog
+              url={product.photoUrl}
+              alt={`Foto de ${product.name}`}
+              fileName={`fertrac-${product.ref.replace(/[^\w.-]+/g, '-')}`}
+              onClose={() => setZoom(false)}
+            />
+          )}
           <div className="detail__action">
             <button type="button" className="btn btn--primary btn--block" onClick={onFavorite}>
               <Icon name="star" size={18} /> {favorite ? 'Editar favorito' : 'Guardar en favoritos'}

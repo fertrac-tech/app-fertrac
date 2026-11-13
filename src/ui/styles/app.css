@@ -1034,31 +1034,71 @@ p {
   inset: 0;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: clamp(12px, 3vw, 24px);
   overflow: hidden;
   background: var(--scrim);
 }
-/* El alto se limita contra el viewport: `max-height: 100%` no funciona fiable en
-   una fila de grid de tamaño automático y una foto vertical se desbordaba. */
-.lightbox img {
+/* Card del visor: marco con cabecera de acciones y cuerpo que nunca desborda. */
+.lightbox__card {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 1080px);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.45);
+}
+.lightbox__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 4px 4px 4px 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.lightbox__title {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lightbox__actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+}
+.lightbox__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(8px, 2vw, 20px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: var(--bg-subtle);
+}
+/* Alto limitado contra el viewport: `max-height: 100%` no es fiable en una fila
+   de grid de tamaño automático y una foto vertical se desbordaba. */
+.lightbox__body img {
   display: block;
   width: auto;
   height: auto;
-  max-width: min(100%, 1200px);
-  max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
-  border-radius: var(--radius-md);
+  max-width: 100%;
+  max-height: calc(100vh - 150px);
+  max-height: calc(100dvh - 150px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
   background: var(--bg-surface);
   object-fit: contain;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.4);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
   cursor: zoom-out;
-}
-.lightbox__close {
-  position: absolute;
-  z-index: 1;
-  top: 12px;
-  right: 12px;
-  color: var(--text-inverse);
 }
 .detail__content {
   display: flex;
@@ -1439,6 +1479,21 @@ p {
   .detail--overlay .detail__scroll {
     flex: 1 1 0;
     overflow-y: auto;
+  }
+  .lightbox {
+    padding: 12px;
+  }
+  .lightbox__card {
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
+  }
+  .lightbox__head {
+    min-height: 48px;
+    padding-left: 12px;
+  }
+  .lightbox__body img {
+    max-height: calc(100vh - 132px);
+    max-height: calc(100dvh - 132px);
   }
 }
 @media (min-width: 600px) {
