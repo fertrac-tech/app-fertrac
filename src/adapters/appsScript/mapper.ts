@@ -70,7 +70,7 @@ export function rowToProduct(row: CatalogRow, photos: Readonly<Record<string, st
     category: text(row[COL.CATEGORIA]),
     subcategory: text(row[COL.SUBCATEGORIA]),
     type: text(row[COL.TIPO]),
-    application: text(row[COL.APLICACION]),
+    application: text(row[COL.APLICACION]) === '0' ? '' : text(row[COL.APLICACION]),
     alternates: text(row[COL.ALTERNOS]),
     condition: parseCondition(row[COL.CONDICION]),
     stock: Math.max(0, parseNumber(row[COL.INV]) ?? 0),

@@ -1003,22 +1003,30 @@ p {
   font-weight: 600;
 }
 .detail__photo {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
   height: 190px;
+  overflow: hidden;
   background: var(--bg-subtle);
   color: var(--text-secondary);
 }
-.detail__photo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
+/* La foto se posiciona de forma absoluta dentro de la caja: no participa del flujo
+   y no puede empujar ni tapar el contenido, sea cual sea su tamaño real. */
 .detail__zoom {
+  position: absolute;
+  inset: 0;
+  display: block;
   width: 100%;
   height: 100%;
   cursor: zoom-in;
+}
+.detail__photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .lightbox {
   position: fixed;

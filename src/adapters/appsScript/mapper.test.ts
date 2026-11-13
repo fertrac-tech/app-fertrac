@@ -58,6 +58,11 @@ describe('rowToProduct', () => {
     expect(rowToProduct(row({ REF: 'X-1', PRECIO_PROMO: '2x1 hasta agotar' }))?.prices.promo).toBe('2x1 hasta agotar');
   });
 
+  it('una aplicación "0" (celda vacía en la hoja) se trata como sin dato', () => {
+    expect(rowToProduct(row({ REF: 'X-1', APLICACION: 0 }))?.application).toBe('');
+    expect(rowToProduct(row({ REF: 'X-1', APLICACION: 'Kenworth' }))?.application).toBe('Kenworth');
+  });
+
   it('descarta filas sin referencia', () => {
     expect(rowToProduct(row({ PRODUCTO: 'SIN REF' }))).toBeNull();
   });
