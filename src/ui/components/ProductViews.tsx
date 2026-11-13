@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { pageWindow, type PageInfo } from '@/domain/pagination';
-import { priorityTier, type Product } from '@/domain/product';
+import { conditionLabel, priorityTier, type Product } from '@/domain/product';
 import { formatCount, formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, Icon, Logo, PromoColorTag, StockPill, Thumb } from './primitives';
 
@@ -34,7 +34,7 @@ export function ProductCards({ items, selectedRef, isFavorite, onOpen, onFavorit
                 <button type="button" className="card__open" onClick={() => onOpen(product.ref)}>
                   <Thumb url={product.photoUrl} />
                   <span className="card__info">
-                    <ConditionPill condition={product.condition} />
+                    <ConditionPill condition={product.condition} promoColor={product.promoColor} />
                     <span className="card__name">{alias || product.name}</span>
                     <span className="card__sub truncate">
                       {product.ref} · {alias ? product.name : product.brand}
@@ -77,6 +77,7 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
       <div className="table__body" role="rowgroup" data-scroll>
         {items.map(({ product, alias }) => {
           const favorite = isFavorite(product.ref);
+          const condition = conditionLabel(product);
           return (
             <div className="row" role="row" key={product.ref} data-tier={priorityTier(product)} data-selected={selectedRef === product.ref}>
               <span role="cell"><Thumb url={product.photoUrl} /></span>
@@ -87,8 +88,13 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
                   {alias || product.name}
                 </button>
               </span>
-              <span role="cell" className="row__cond col-condition" data-condition={product.condition}>
-                {product.condition === 'NORMAL' ? '—' : product.condition}
+              <span
+                role="cell"
+                className="row__cond col-condition"
+                data-condition={product.condition}
+                data-color={condition && condition !== product.condition ? product.promoColor ?? undefined : undefined}
+              >
+                {condition ?? ''}
               </span>
               <span role="cell" className="row__inv">
                 <StockPill stock={product.stock} />

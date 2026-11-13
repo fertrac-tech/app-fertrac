@@ -123,6 +123,11 @@ p {
   background: var(--state-promo-soft);
   color: var(--state-promo-text);
 }
+/* Promoción que nombra un color (CONDICIÓN = "VERDE", "MAGENTA"…): texto y fondo en ese color. */
+.pill[data-color] {
+  color: var(--c);
+  background: color-mix(in srgb, var(--c) 15%, var(--bg-surface));
+}
 .pill--ok {
   background: var(--stock-ok-soft);
   color: var(--stock-ok);
@@ -971,9 +976,8 @@ p {
   --cols: 40px minmax(110px, 0.7fr) minmax(90px, 0.6fr) minmax(200px, 2fr) 84px 96px minmax(110px, 0.6fr) 36px;
 }
 .table[data-compact='true'] {
-  --cols: 40px minmax(100px, 0.7fr) minmax(160px, 2fr) 96px minmax(104px, 0.6fr) 36px;
+  --cols: 40px minmax(100px, 0.7fr) minmax(80px, 0.6fr) minmax(160px, 2fr) 96px minmax(104px, 0.6fr) 36px;
 }
-.table[data-compact='true'] .col-brand,
 .table[data-compact='true'] .col-condition {
   display: none;
 }
@@ -1050,6 +1054,10 @@ p {
 }
 .row__cond[data-condition='PROMO'] {
   color: var(--state-promo-text);
+}
+/* CONDICIÓN con color propio ("VERDE", "MAGENTA"…): el texto usa ese color. */
+.row__cond[data-color] {
+  color: var(--c);
 }
 .row__price {
   font-weight: 600;

@@ -184,6 +184,17 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
     expect(screen.getByText('100 por página · pág. 1 de 3')).toBeInTheDocument();
   });
 
+  it('escritorio con detalle abierto: la tabla compacta conserva Marca después de Referencia', async () => {
+    renderApp({ viewport: 'expanded' });
+    const table = await screen.findByRole('table', { name: 'Productos' });
+    expect(within(table).getAllByRole('columnheader')[1]).toHaveTextContent('Referencia');
+    expect(within(table).getAllByRole('columnheader')[2]).toHaveTextContent('Marca');
+
+    await userEvent.click(within(within(table).getAllByRole('row')[1] as HTMLElement).getAllByRole('button')[0] as HTMLElement);
+    expect(table).toHaveAttribute('data-compact', 'true');
+    expect(within(table).getAllByRole('columnheader')[2]).toHaveTextContent('Marca');
+  });
+
   it('al cambiar de tamaño se conserva página, búsqueda y producto abierto (viven en la URL)', async () => {
     const first = renderApp({ viewport: 'compact', route: '/?q=filtro&p=1&ref=FAP-3321' });
     expect(await screen.findByRole('heading', { name: 'FILTRO DE AIRE PRIMARIO' })).toBeInTheDocument();

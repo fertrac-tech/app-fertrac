@@ -3,7 +3,7 @@ import isotipo from '@/assets/brand/isotipo.png';
 import logoPrincipal from '@/assets/brand/logo.png';
 import logoNegativo from '@/assets/brand/logo2.png';
 import logoMono from '@/assets/brand/logo3.png';
-import { promoColorLabel, stockLevel, type Condition, type PromoColor } from '@/domain/product';
+import { conditionLabel, promoColorLabel, stockLevel, type Product, type PromoColor } from '@/domain/product';
 import { initials } from '@/domain/text';
 import { useTheme } from '../context';
 
@@ -64,11 +64,20 @@ export function PromoColorTag({ color }: { color?: PromoColor | null }) {
   );
 }
 
-export function ConditionPill({ condition, large = false }: { condition: Condition; large?: boolean }) {
-  if (condition === 'NORMAL') return null;
+export function ConditionPill({
+  condition,
+  promoColor,
+  large = false,
+}: Pick<Product, 'condition' | 'promoColor'> & { large?: boolean }) {
+  const label = conditionLabel({ condition, promoColor });
+  if (!label) return null;
+  const promo = condition !== 'NUEVO';
   return (
-    <span className={`pill pill--${condition === 'NUEVO' ? 'nuevo' : 'promo'} ${large ? 'pill--lg' : ''}`}>
-      {condition}
+    <span
+      className={`pill pill--${promo ? 'promo' : 'nuevo'} ${large ? 'pill--lg' : ''}`}
+      data-color={promoColor ?? undefined}
+    >
+      {label}
     </span>
   );
 }

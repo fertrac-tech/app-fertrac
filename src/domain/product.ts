@@ -17,6 +17,17 @@ export function promoColorLabel(color: PromoColor): string {
   return color.charAt(0).toUpperCase() + color.slice(1);
 }
 
+/**
+ * Texto de la condición que se muestra en el catálogo. null = no mostrar nada
+ * (sin condición o "NO TIENE"). Cuando CONDICIÓN nombra un color ("VERDE",
+ * "MAGENTA", "AZUL"…), se muestra ese color en lugar de "PROMO".
+ */
+export function conditionLabel(p: Pick<Product, 'condition' | 'promoColor'>): string | null {
+  if (p.condition === 'NORMAL') return null;
+  if (p.condition === 'PROMO' && p.promoColor) return p.promoColor.toUpperCase();
+  return p.condition;
+}
+
 export interface ProductPrices {
   gross: number | null;
   net5: number | null;

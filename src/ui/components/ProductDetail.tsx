@@ -148,7 +148,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
             </div>
             <div className="detail__content">
               <div className="detail__pills">
-                <ConditionPill condition={product.condition} large />
+                <ConditionPill condition={product.condition} promoColor={product.promoColor} large />
                 <StockPill stock={product.stock} long large />
                 <PromoColorTag color={product.promoColor} />
               </div>
