@@ -15,6 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: github-pages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,8 +29,8 @@ jobs:
         env:
           VITE_BASE_PATH: /app-fertrac/
           # Se definen en Settings → Secrets and variables → Actions → Variables.
-          VITE_APPS_SCRIPT_URL: ${{ vars.STAGING_APPS_SCRIPT_URL }}
-          VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_GOOGLE_CLIENT_ID }}
+          VITE_APPS_SCRIPT_URL: ${{ vars.STAGING_APPS_SCRIPT_URL || secrets.STAGING_APPS_SCRIPT_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.STAGING_GOOGLE_CLIENT_ID || secrets.STAGING_GOOGLE_CLIENT_ID }}
           VITE_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
