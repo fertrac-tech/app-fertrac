@@ -9,6 +9,22 @@ body,
 #root {
   height: 100%;
 }
+/* Área segura superior: con viewport-fit=cover el contenido se dibuja bajo la barra
+   de estado; se reserva ese alto y se pinta una franja del color de la superficie. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+#root {
+  padding-top: var(--safe-top);
+}
+body::before {
+  content: '';
+  position: fixed;
+  z-index: 45;
+  inset: 0 0 auto;
+  height: var(--safe-top);
+  background: var(--bg-surface);
+}
 body {
   margin: 0;
   background: var(--bg-app);
@@ -193,7 +209,7 @@ p {
   position: fixed;
   z-index: 60;
   left: 50%;
-  top: 2px;
+  top: calc(2px + var(--safe-top));
   translate: -50% 0;
   padding: 2px 10px;
   border-radius: var(--radius-pill);
@@ -225,7 +241,7 @@ p {
 }
 .gate__theme {
   position: fixed;
-  top: 8px;
+  top: calc(8px + var(--safe-top));
   right: 8px;
 }
 .gate__card {
@@ -1035,6 +1051,7 @@ p {
   display: grid;
   place-items: center;
   padding: clamp(12px, 3vw, 24px);
+  padding-top: calc(clamp(12px, 3vw, 24px) + var(--safe-top));
   overflow: hidden;
   background: var(--scrim);
 }
@@ -1044,7 +1061,7 @@ p {
   flex-direction: column;
   width: min(100%, 1080px);
   max-height: calc(100vh - 48px);
-  max-height: calc(100dvh - 48px);
+  max-height: calc(100dvh - 48px - var(--safe-top));
   overflow: hidden;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -1092,7 +1109,7 @@ p {
   height: auto;
   max-width: 100%;
   max-height: calc(100vh - 150px);
-  max-height: calc(100dvh - 150px);
+  max-height: calc(100dvh - 150px - var(--safe-top));
   border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   background: var(--bg-surface);
@@ -1474,7 +1491,7 @@ p {
   .detail--overlay {
     position: fixed;
     z-index: 40;
-    inset: 0;
+    inset: var(--safe-top) 0 0;
   }
   .detail--overlay .detail__scroll {
     flex: 1 1 0;
@@ -1482,10 +1499,11 @@ p {
   }
   .lightbox {
     padding: 12px;
+    padding-top: calc(12px + var(--safe-top));
   }
   .lightbox__card {
     max-height: calc(100vh - 24px);
-    max-height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px - var(--safe-top));
   }
   .lightbox__head {
     min-height: 48px;
@@ -1493,7 +1511,7 @@ p {
   }
   .lightbox__body img {
     max-height: calc(100vh - 132px);
-    max-height: calc(100dvh - 132px);
+    max-height: calc(100dvh - 132px - var(--safe-top));
   }
 }
 @media (min-width: 600px) {
