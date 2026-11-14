@@ -1,6 +1,12 @@
 // ============================================================
 // AUTORIZACIÓN — Lista blanca USUARIO + DISPOSITIVO + CANAL
 //
+// ⚠️ NATURALEZA DEL CONTROL (SEC-02): la capa DISPOSITIVO/CANAL es un CONTROL DE
+// GESTIÓN, no una barrera criptográfica. device_id, canal, plataforma y modelo los
+// declara el cliente. La identidad la prueba el ID token (gs/Seguridad.gs) y el
+// token de dispositivo firmado liga correo + device_id; las alertas detectan uso
+// compartido. Ver docs/SEGURIDAD_DISPOSITIVOS.md antes de apoyarse en esta capa.
+//
 // Hojas (en CONFIG.ID_BASE_MOTOR):
 //   USUARIOS AUTORIZADOS  A = EMAIL (desde fila 2) + columnas ubicadas POR ENCABEZADO:
 //     CANAL  ∈ APP | WEB | AMBOS     (vacío = CONFIG.CANAL_POR_DEFECTO)

@@ -156,4 +156,42 @@ describe('SessionController — seguridad en tres capas', () => {
     expect(catalog.clear).toHaveBeenCalled();
     expect(c.getToken()).toBeNull();
   });
+
+  it('el backend niega el canje del ID token → login con el mensaje de la capa', async () => {
+    const c = new SessionController(fakeAuth({ signIn: async () => { throw new AccessDeniedError('no_autorizado'); } }), fakeCatalog(['ok']), device);
+    await c.start();
+    await c.signIn();
+    expect(c.getState()).toMatchObject({ status: 'signedOut', busy: false, notice: { title: 'Cuenta sin acceso' } });
+  });
+
+  it('botón oficial (web): la sesión que entrega el proveedor inicia el flujo normal', async () => {
+    let deliver: ((p: Promise<Session>) => void) | null = null;
+    const auth = fakeAuth({ mountButton: (_el, onResult) => { deliver = onResult; return true; } });
+    const c = new SessionController(auth, fakeCatalog(['ok']), device);
+    await c.start();
+    expect(c.mountSignInButton(document.createElement('div'))).toBe(true);
+    deliver!(Promise.resolve(session));
+    await vi.waitFor(() => expect(c.getState().status).toBe('ready'));
+    expect(new SessionController(fakeAuth(), fakeCatalog(['ok']), device).mountSignInButton(document.createElement('div'))).toBe(false);
+  });
+
+  it('token rotado por el backend: se usa en las siguientes peticiones y se persiste', async () => {
+    const persist = vi.fn();
+    const c = new SessionController(fakeAuth({ restore: async () => session, persist }), fakeCatalog(['ok']), device);
+    await c.start();
+    c.rotate('st1.rotado', 123);
+    expect(c.getToken()).toBe('st1.rotado');
+    expect(persist).toHaveBeenCalledWith({ ...session, token: 'st1.rotado', expiresAt: 123 });
+    await c.sync();
+    expect(c.getToken()).toBe('st1.rotado');
+  });
+
+  it('sesión vencida sin renovación: al pulsar Sincronizar lleva al login (no se queda en bucle)', async () => {
+    const auth = fakeAuth({ restore: async () => session });
+    const c = new SessionController(auth, fakeCatalog(['token_invalido'], 777), device);
+    await c.start();
+    expect(c.getState()).toMatchObject({ status: 'ready', offline: true });
+    await c.sync();
+    expect(c.getState()).toMatchObject({ status: 'signedOut', notice: { title: 'Tu sesión expiró' } });
+  });
 });

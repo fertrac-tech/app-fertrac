@@ -73,15 +73,18 @@ function registrarLog_(nivel, capa, modulo, mensaje, stack, extra, email) {
 }
 
 // ── Endpoint público (?log=1) llamado desde la app (frontend) ──
-// Se acepta la llave (respaldo: token verificado). Nunca debe romper la
-// respuesta del API ni exponer datos: escribe una fila y responde {ok}.
+// Exige una credencial verificada: token de dispositivo (st + device) o, en la
+// transición, access token de Fertrac. La llave pública ACCESS_KEY fue retirada.
+// Nunca debe romper la respuesta del API ni exponer datos: escribe una fila y responde {ok}.
 function logDesdeApi_(params) {
-  // Solo aceptar logs autenticados (llave o token válido) para no permitir
-  // que cualquiera llene la hoja. El front envía SIEMPRE con key para que el
-  // log llegue incluso cuando el token falla (caso típico de error).
-  const autorizado = params.key === CONFIG.ACCESS_KEY ||
-    (params.token && verificarTokenCacheada_(params.token) !== null);
-  if (!autorizado) return jsonError_("no_autorizado");
+  let emailVerificado = null;
+  if (params.st) {
+    const ts = verificarTokenSesion_(params.st, params.device);
+    if (ts.ok) emailVerificado = ts.claims.e;
+  } else if (params.token && CONFIG.ACEPTAR_ACCESS_TOKEN_LEGADO) {
+    emailVerificado = verificarTokenCacheada_(params.token);
+  }
+  if (!emailVerificado) return jsonError_("no_autorizado");
 
   const nivel   = ["error", "warn", "info"].includes(params.nivel) ? params.nivel : "error";
   const capa    = params.capa === "sw" ? "sw" : "app";
@@ -93,7 +96,7 @@ function logDesdeApi_(params) {
     String(params.mensaje || "").slice(0, 600),
     String(params.stack || "").slice(0, 1200),
     String(params.extra || "").slice(0, 600),
-    String(params.email || "")
+    emailVerificado
   );
   return jsonRes_({ ok: true });
 }

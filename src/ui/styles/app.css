@@ -290,6 +290,18 @@ p {
   font-size: 14px;
   line-height: 1.4;
 }
+/* Contenedor del botón oficial de Google (lo dibuja google.accounts.id). */
+.gate__gsi {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+}
+.gate__gsi[aria-busy='true'] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .gate__google {
   display: grid;
   place-items: center;

@@ -84,9 +84,17 @@ export interface UserProfile {
 
 export interface Session {
   user: UserProfile;
+  /** Token de dispositivo firmado por el backend (SEC-02). Nunca un token de Google. */
   token: string;
   /** Epoch ms en que vence el token. */
   expiresAt: number;
+}
+
+/** Resultado del canje del ID token de Google en el backend (?op=sesion). */
+export interface SessionGrant {
+  token: string;
+  expiresAt: number;
+  user?: Partial<UserProfile>;
 }
 
 export class SignInError extends Error {
@@ -102,8 +110,15 @@ export class SignInError extends Error {
 export interface AuthProvider {
   /** Sesión guardada, aunque el token esté vencido (permite ver el catálogo sin conexión). */
   restore(): Promise<Session | null>;
-  /** Flujo interactivo de Google. Lanza SignInError. */
+  /** Flujo interactivo de Google. Lanza SignInError (o AccessDeniedError si el backend niega el canje). */
   signIn(): Promise<Session>;
+  /**
+   * Botón oficial del proveedor (web). Devuelve false si el proveedor usa el botón propio
+   * de la app (APK, demo). `onResult` recibe la sesión en curso cuando el usuario lo pulsa.
+   */
+  mountButton?(container: HTMLElement, onResult: (session: Promise<Session>) => void): boolean;
+  /** Guarda un token rotado por el backend. */
+  persist?(session: Session): void;
   /** Renueva el token sin pedir datos al usuario; null si no fue posible. */
   refresh(current: Session): Promise<Session | null>;
   signOut(): Promise<void>;

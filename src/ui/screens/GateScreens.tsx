@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import type { AppState } from '@/app/sessionController';
 import { accessMessage, evaluateAccess } from '@/domain/access';
 import { Icon, Logo, ThemeToggle } from '../components/primitives';
@@ -29,7 +30,7 @@ export function DataProtectionNotice() {
 }
 
 export function LoginScreen({ state }: { state: Extract<AppState, { status: 'signedOut' }> }) {
-  const { session, config } = useContainer();
+  const { config } = useContainer();
   return (
     <main className="gate">
       <div className="gate__theme"><ThemeToggle /></div>
@@ -42,10 +43,7 @@ export function LoginScreen({ state }: { state: Extract<AppState, { status: 'sig
             <strong>{state.notice.title}.</strong> {state.notice.body}
           </div>
         )}
-        <button type="button" className="btn btn--outline btn--block" disabled={state.busy} onClick={() => void session.signIn()}>
-          <span className="gate__google" aria-hidden="true">G</span>
-          {state.busy ? 'Conectando…' : 'Iniciar sesión con Google'}
-        </button>
+        <SignInButton busy={state.busy} />
         <section className="gate__box">
           <h2>Acceso protegido en 3 capas</h2>
           <ul className="gate__layers">
@@ -57,6 +55,33 @@ export function LoginScreen({ state }: { state: Extract<AppState, { status: 'sig
         <DataProtectionNotice />
       </div>
     </main>
+  );
+}
+
+/**
+ * Web: botón oficial "Sign in with Google" (entrega el ID token que se canjea en el backend).
+ * APK y demo: botón propio de la app, que abre el flujo nativo.
+ */
+function SignInButton({ busy }: { busy: boolean }) {
+  const { session } = useContainer();
+  const slot = useRef<HTMLDivElement>(null);
+  const [official, setOfficial] = useState<boolean | null>(null);
+
+  useLayoutEffect(() => {
+    setOfficial(slot.current ? session.mountSignInButton(slot.current) : false);
+  }, [session]);
+
+  return (
+    <>
+      <div ref={slot} className="gate__gsi" hidden={official === false} aria-busy={busy} />
+      {official === false && (
+        <button type="button" className="btn btn--outline btn--block" disabled={busy} onClick={() => void session.signIn()}>
+          <span className="gate__google" aria-hidden="true">G</span>
+          {busy ? 'Conectando…' : 'Iniciar sesión con Google'}
+        </button>
+      )}
+      {official && busy && <p className="gate__text" role="status">Conectando…</p>}
+    </>
   );
 }
 

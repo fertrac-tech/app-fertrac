@@ -57,12 +57,51 @@ const CONFIG = {
   FOTOS_MIN_KB:      10,   // tamaño mínimo del webp descargado (rechaza placeholders/4KB)
   SHEET_BITACORA_FOTOS: "BITACORA_FOTOS",
 
-  // ── Acceso / API ──
-  ACCESS_KEY:        "fertrac2024",
+  // ── Identidad (SEC-01) ──
+  // La llave pública ACCESS_KEY fue RETIRADA (servía el catálogo sin token).
+  // Un ?key= recibe 'token_requerido'. No volver a crear llaves compartidas.
+  DOMINIO_PERMITIDO: "fertrac.com",
+  // Audiencias (aud) válidas del ID token. La APK pide el ID token con este mismo
+  // cliente web (serverClientId), así que normalmente basta con uno.
+  OAUTH_CLIENT_IDS: [
+    "13363096447-a96qshpi1rg9ahoc72t9e04p0nqp000a.apps.googleusercontent.com"
+  ],
+  // TRANSICIÓN: access tokens de clientes en caché (frontend anterior).
+  // azp/aud aceptados: cliente web + el azp de la APK (copiarlo de la columna AZP
+  // de DISPOSITIVOS, filas CANAL = APP). Apagar ACEPTAR_ACCESS_TOKEN_LEGADO
+  // ~1 semana después de publicar el nuevo frontend.
+  ACEPTAR_ACCESS_TOKEN_LEGADO: true,
+  OAUTH_AZP_LEGADO: [
+    "13363096447-a96qshpi1rg9ahoc72t9e04p0nqp000a.apps.googleusercontent.com"
+  ],
+
+  // ── Token de dispositivo (SEC-02) — gs/Seguridad.gs ──
+  // Firmado con HMAC-SHA256 (secreto en Propiedades del script, se crea solo).
+  // TTL corto + rotación deslizante; tras SESION_MAX_DIAS se exige Google de nuevo.
+  TOKEN_DISPOSITIVO: { TTL_HORAS: 12, ROTAR_HORAS: 6, SESION_MAX_DIAS: 7 },
+
+  // ── Alertas de uso compartido del dispositivo (SEC-02.4) ──
+  ALERTAS_DISPOSITIVO: {
+    VENTANA_MIN: 60,              // ventana de observación por device_id
+    MAX_SESIONES_VENTANA: 6,      // inicios de sesión permitidos en la ventana
+    REENVIO_HORAS: 6,             // no repetir la misma alerta antes de este plazo
+    AUTO_BLOQUEAR: false          // true = marca el dispositivo BLOQUEADO al alertar
+  },
+
+  // ── Play Integrity para la APK (SEC-02.3) — APAGADO ──
+  // Activar solo tras completar los requisitos de docs/SEGURIDAD_DISPOSITIVOS.md.
+  PLAY_INTEGRITY: {
+    ACTIVO: false,
+    PAQUETE: "com.fertrac.listaprecios",
+    CERT_SHA256: [],                                  // huella(s) del certificado de firma (base64url, como la devuelve la API)
+    VEREDICTOS_APP: ["PLAY_RECOGNIZED", "UNRECOGNIZED_VERSION"],   // la APK instalada a mano llega como UNRECOGNIZED_VERSION
+    EXIGIR_DISPOSITIVO: "MEETS_DEVICE_INTEGRITY",
+    MAX_EDAD_MS: 300000
+  },
 
   // ── Lista blanca USUARIO + DISPOSITIVO + CANAL (gs/Autorizacion.gs) ──
   // false = OBSERVACIÓN: registra y calcula el veredicto (Log App), no bloquea.
-  // true  = CUMPLIMIENTO: bloquea y la llave ACCESS_KEY deja de servir datos (solo ?log=1).
+  // true  = CUMPLIMIENTO: bloquea según usuario, canal y dispositivo.
   ENFORCE_DISPOSITIVOS:       false,
   CANAL_POR_DEFECTO:          "APP",                 // usuarios con CANAL vacío en USUARIOS AUTORIZADOS
   MAX_DISPOSITIVOS_POR_CANAL: { APP: 1, WEB: 2 },    // aprobados por usuario y canal (PWA = WEB)

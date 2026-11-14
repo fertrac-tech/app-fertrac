@@ -57,15 +57,39 @@ export class SessionController {
   }
 
   async signIn(): Promise<void> {
-    if (this.state.status !== 'signedOut') return;
+    if (this.state.status !== 'signedOut' || this.state.busy) return;
     this.set({ ...this.state, notice: null, busy: true });
+    await this.completeSignIn(this.auth.signIn());
+  }
+
+  /**
+   * Monta el botón oficial de Google (web). Devuelve false si el proveedor no tiene botón
+   * propio: la pantalla muestra entonces el botón de la app, que llama a `signIn()`.
+   */
+  mountSignInButton(container: HTMLElement): boolean {
+    if (!this.auth.mountButton) return false;
+    return this.auth.mountButton(container, (pending) => {
+      if (this.state.status !== 'signedOut') return;
+      this.set({ ...this.state, notice: null, busy: true });
+      void this.completeSignIn(pending);
+    });
+  }
+
+  /** El backend rotó el token de dispositivo (SEC-02): se usa desde ya y se persiste. */
+  rotate(token: string, expiresAt: number): void {
+    if (!this.session) return;
+    this.session = { ...this.session, token, expiresAt };
+    this.auth.persist?.(this.session);
+  }
+
+  private async completeSignIn(pending: Promise<Session>): Promise<void> {
     try {
-      await this.enter(await this.auth.signIn());
+      await this.enter(await pending);
     } catch (error) {
-      const notice =
-        error instanceof SignInError && error.code === 'cancelado'
-          ? null
-          : { title: 'No se pudo iniciar sesión', body: error instanceof SignInError && error.message !== error.code ? error.message : 'Intenta de nuevo en unos segundos.' };
+      let notice: AccessMessage | null;
+      if (error instanceof SignInError && error.code === 'cancelado') notice = null;
+      else if (error instanceof AccessDeniedError && error.code !== 'token_invalido') notice = accessMessage(error.code);
+      else notice = { title: 'No se pudo iniciar sesión', body: error instanceof SignInError && error.message !== error.code ? error.message : 'Intenta de nuevo en unos segundos.' };
       this.set({ status: 'signedOut', notice, busy: false });
     }
   }
@@ -73,15 +97,18 @@ export class SessionController {
   /** Reintenta el acceso desde una pantalla de bloqueo (p. ej. dispositivo ya aprobado). */
   async retry(): Promise<void> {
     if (this.state.status !== 'blocked') return;
+    const session = this.session ?? this.state.session;
     this.set({ ...this.state, busy: true });
-    await this.enter(this.state.session);
+    await this.enter(session);
   }
 
   /** Sincronización manual desde la app. */
   async sync(): Promise<void> {
     if (this.state.status !== 'ready' || this.state.syncing) return;
+    const session = this.session ?? this.state.session;
     this.set({ ...this.state, syncing: true, syncError: null });
-    await this.enter(this.state.session);
+    // Manual: si la sesión venció y Google no la renueva en silencio, se pide iniciar sesión.
+    await this.enter(session, true, true);
   }
 
   async signOut(): Promise<void> {
@@ -106,7 +133,7 @@ export class SessionController {
     }
   }
 
-  private async enter(session: Session, allowRefresh = true): Promise<void> {
+  private async enter(session: Session, allowRefresh = true, interactive = false): Promise<void> {
     this.session = session;
     const deviceCode = await this.deviceCode();
     try {
@@ -114,21 +141,22 @@ export class SessionController {
       this.catalogVersion += 1;
       this.set({ status: 'ready', session, deviceCode, channel: this.channel, syncing: false, lastSyncedAt: result.syncedAt, offline: false, syncError: null, catalogVersion: this.catalogVersion });
     } catch (error) {
-      if (error instanceof AccessDeniedError) return this.handleDenied(session, error.code, deviceCode, allowRefresh);
+      if (error instanceof AccessDeniedError) return this.handleDenied(session, error.code, deviceCode, allowRefresh, interactive);
       const message = error instanceof ApiError && error.code === 'sin_conexion' ? 'Sin conexión. Se muestra la última copia guardada.' : 'No se pudo actualizar el catálogo.';
       await this.showLocalCopy(session, deviceCode, message);
     }
   }
 
-  private async handleDenied(session: Session, code: DeniedCode, deviceCode: string, allowRefresh: boolean): Promise<void> {
+  private async handleDenied(session: Session, code: DeniedCode, deviceCode: string, allowRefresh: boolean, interactive = false): Promise<void> {
     const verdict = evaluateAccess(code);
     if (verdict.wipeLocalData) await this.catalog.clear().catch(() => undefined);
 
     if (verdict.requiresSignIn) {
       const renewed = allowRefresh ? await this.auth.refresh(session) : null;
       if (renewed) return this.enter(renewed, false);
-      // Sesión vencida: si hay copia local se sigue trabajando; si no, se pide iniciar sesión.
-      if ((await this.catalog.lastSyncedAt().catch(() => null)) !== null) {
+      // Sesión vencida: al abrir la app, si hay copia local se sigue trabajando; si el usuario
+      // pide sincronizar (o no hay copia), se le lleva a iniciar sesión con Google.
+      if (!interactive && (await this.catalog.lastSyncedAt().catch(() => null)) !== null) {
         return this.showLocalCopy(session, deviceCode, 'Tu sesión venció. Pulsa "Sincronizar" para renovarla.');
       }
       await this.auth.signOut();

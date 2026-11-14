@@ -14,39 +14,80 @@ const API_CACHE_LISTA = "api_lista_datos";   // JSON de Hoja2
 const API_TTL_LISTA  = 90;                   // segundos de vigencia de Hoja2
 const API_TTL_VERIF  = 1500;                 // segundos (25 min) de vigencia del token
 
+// GET: compatibilidad (clientes en caché). POST: canal recomendado — las
+// credenciales viajan en el cuerpo (text/plain, sin preflight CORS) y no quedan
+// en URLs, logs de ejecución ni proxies (SEC-03).
 function doGet(e) {
-  const params = (e && e.parameter) || {};
+  return manejarPeticion_((e && e.parameter) || {});
+}
+
+function doPost(e) {
+  let cuerpo = {};
+  try {
+    const raw = e && e.postData && e.postData.contents;
+    if (raw) cuerpo = JSON.parse(raw);
+  } catch (err) {
+    return jsonError_("respuesta_invalida");
+  }
+  const params = {};
+  const copiar = function (o) {
+    Object.keys(o || {}).forEach(function (k) {
+      const v = o[k];
+      if (v !== null && v !== undefined && typeof v !== "object") params[k] = String(v);
+    });
+  };
+  copiar(e && e.parameter);
+  copiar(cuerpo);                                         // el cuerpo manda sobre la URL
+  return manejarPeticion_(params);
+}
+
+function manejarPeticion_(params) {
 
   // ── 0. Log de errores de la app (?log=1) ──
-  // Va ANTES de la autorización a propósito: así un error de auth
-  // (token_invalido/no_autorizado) también puede registrarse en Log App.
-  // logDesdeApi_ valida la llave/token por su cuenta y nunca rompe el API.
+  // Va ANTES de la autorización a propósito; logDesdeApi_ exige su propia credencial.
   if (params.log === "1") {
     return logDesdeApi_(params);
   }
 
+  // ── 0b. Canje del ID token de Google por el token de dispositivo (SEC-01/SEC-02) ──
+  if (params.op === "sesion") {
+    return iniciarSesion_(params);
+  }
+
   // ── 1. Autorización ──
-  // estado: 'ok' | 'token_invalido' | 'no_autorizado' | 'sin_credenciales'
+  // estado: 'ok' | 'token_invalido' | 'no_autorizado' | 'sin_credenciales' | 'token_requerido'
   // Con lista blanca (gs/Autorizacion.gs) además: 'usuario_suspendido' |
   // 'canal_no_autorizado' | 'dispositivo_pendiente' | 'dispositivo_bloqueado' |
   // 'dispositivo_limite' | ... — solo si CONFIG.ENFORCE_DISPOSITIVOS = true.
   let estado;
   let emailToken = null;                                // correo VERIFICADO (no el del query)
-  if (params.key === CONFIG.ACCESS_KEY) {
-    // Transición vía llave. En cumplimiento la llave pública ya no sirve datos
-    // (solo ?log=1, atendido arriba): exige token + dispositivo aprobado.
-    estado = CONFIG.ENFORCE_DISPOSITIVOS ? 'token_requerido' : 'ok';
-  } else if (params.token) {
+  let sesionRotada = null;                              // token nuevo para la app (rotación)
+  if (params.st) {
+    // Ruta principal: token de dispositivo firmado (ligado a correo + device_id).
+    const ts = verificarTokenSesion_(params.st, params.device);
+    if (!ts.ok) {
+      estado = 'token_invalido';                        // vencido/alterado → la app renueva con Google
+    } else {
+      emailToken = ts.claims.e;
+      const acl = evaluarAccesoDispositivo_(ts.claims.e, ts.claims.a, params);
+      estado = resolverEstadoAcl_(acl, ts.claims.e, ts.claims.a, params);
+      vigilarUsoDispositivo_(ts.claims.e, ts.claims.d, params, false);
+      if (estado === 'ok') sesionRotada = rotarTokenSiCorresponde_(ts.claims);
+    }
+  } else if (params.token && CONFIG.ACEPTAR_ACCESS_TOKEN_LEGADO) {
+    // TRANSICIÓN: access token de Google (clientes en caché). Exige azp/aud de Fertrac.
     const info = verificarTokenInfoCacheada_(params.token);
     if (!info) {
-      estado = 'token_invalido';                        // expirado/inválido → renovar en silencio
+      estado = 'token_invalido';
     } else {
       emailToken = info.email;
-      // no_autorizado (correo fuera de la lista) se mantiene SIEMPRE activo;
-      // el resto de reglas solo bloquea con ENFORCE_DISPOSITIVOS = true.
       const acl = evaluarAccesoDispositivo_(info.email, info.azp, params);
       estado = resolverEstadoAcl_(acl, info.email, info.azp, params);
     }
+  } else if (params.token) {
+    estado = 'token_invalido';                          // legado apagado: fuerza el nuevo inicio de sesión
+  } else if (params.key) {
+    estado = 'token_requerido';                         // llave pública RETIRADA (ver docs/SEGURIDAD_DISPOSITIVOS.md)
   } else {
     estado = 'sin_credenciales';
   }
@@ -54,6 +95,10 @@ function doGet(e) {
   if (estado !== 'ok') {
     return jsonError_(estado);
   }
+  const conSesion = function (obj) {
+    if (sesionRotada) obj.sesion = sesionRotada;
+    return obj;
+  };
 
   // ── 2. Imagen: ?img=FILE_ID ──
   // Render: se devuelve la URL pública de la miniatura de Drive (thumbnail),
@@ -81,10 +126,10 @@ function doGet(e) {
   // relee la CACHE sheet en cada request). Es un cache INDEPENDIENTE del de
   // datos: su invalidación no afecta el tiempo de sincronización de precios.
   if (params.fotos) {
-    return jsonRes_({
+    return jsonRes_(conSesion({
       ok: true,
       fotos: obtenerUrlsFotosCache_()
-    });
+    }));
   }
 
   // ── 4. Actividad de sesión: ?activity=login|heartbeat|end|inactive ──
@@ -96,7 +141,7 @@ function doGet(e) {
     const tipo = ["login", "heartbeat", "end", "inactive"].includes(params.activity)
       ? params.activity : null;
     if (!tipo) return jsonError_('actividad_invalida');
-    registrarActividad_(emailToken || params.email, tipo, params.platform);   // con token: correo verificado
+    registrarActividad_(emailToken, tipo, params.platform);   // solo el correo VERIFICADO (nunca el del query)
     return jsonRes_({ ok: true });
   }
 
@@ -118,7 +163,7 @@ function doGet(e) {
   if (params.delta === "1") {
     const resDatos = obtenerDatosListaCacheados_();
     if (!resDatos.ok) return jsonError_(resDatos.error || 'error');
-    return jsonRes_(filtrarDelta_(resDatos.data, params.since));
+    return jsonRes_(conSesion(filtrarDelta_(resDatos.data, params.since)));
   }
 
   // ── 7. Datos del catálogo: { data: [...] } ──
@@ -127,7 +172,7 @@ function doGet(e) {
   const resDatos = obtenerDatosListaCacheados_();
   if (!resDatos.ok) return jsonError_(resDatos.error || 'error');
   return ContentService
-    .createTextOutput(JSON.stringify({ data: resDatos.data }))
+    .createTextOutput(JSON.stringify(conSesion({ data: resDatos.data })))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -239,20 +284,15 @@ function verificarTokenCacheada_(token) {
   return info ? info.email : null;
 }
 
-// Devuelve { email, azp } o null. `azp` = cliente OAuth que emitió el token
-// (permite distinguir login nativo APK vs login web). Usa tokeninfo y, si no
-// trae correo o falla, cae a userinfo (comportamiento anterior, azp vacío).
+// Devuelve { email, azp } o null. SOLO para la ruta de transición (access token).
+// SEC-01: el token debe haber sido emitido para un cliente OAuth de Fertrac
+// (azp/aud ∈ CONFIG.OAUTH_AZP_LEGADO) y del dominio permitido. Se eliminó el
+// respaldo por userinfo: no permite verificar para qué aplicación se emitió el token.
 // UNA llamada externa por token; TTL = min(API_TTL_VERIF, vida restante).
-const API_CACHE_VERIF2 = "api_verif2_";
+const API_CACHE_VERIF2 = "api_verif3_";
 function verificarTokenInfoCacheada_(token) {
   const cache = CacheService.getScriptCache();
-  const digest = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.MD5,
-    String(token),
-    Utilities.Charset.UTF_8
-  );
-  const hash = digest.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, "0")).join("");
-  const key = API_CACHE_VERIF2 + hash;
+  const key = API_CACHE_VERIF2 + _segSha256Hex_(token).slice(0, 48);
 
   const cacheado = cache.get(key);
   if (cacheado !== null) {
@@ -271,36 +311,22 @@ function verificarTokenInfoCacheada_(token) {
       const t = JSON.parse(r1.getContentText());
       const vida = parseInt(t.expires_in, 10);
       if (vida > 0) ttl = Math.max(60, Math.min(API_TTL_VERIF, vida));
-      if (t.email && String(t.email_verified) !== "false") {
-        info = { email: String(t.email).trim().toLowerCase(), azp: String(t.azp || "") };
-      } else {
-        const em = verificarTokenUserinfo_(token);
-        if (em) info = { email: em, azp: String(t.azp || "") };
+      const permitidos = CONFIG.OAUTH_AZP_LEGADO || [];
+      const azp = String(t.azp || ""), aud = String(t.aud || "");
+      const email = String(t.email || "").trim().toLowerCase();
+      const dominio = "@" + String(CONFIG.DOMINIO_PERMITIDO || "").toLowerCase();
+      const clienteOk = permitidos.indexOf(azp) >= 0 || permitidos.indexOf(aud) >= 0;
+      if (clienteOk && email && String(t.email_verified) === "true" && email.slice(-dominio.length) === dominio) {
+        info = { email: email, azp: azp };
+      } else if (!clienteOk) {
+        registrarLog_("warn", "backend", "token", "Access token de cliente no permitido azp=" + azp, "", "", email);
       }
-    } else {
-      const em = verificarTokenUserinfo_(token);
-      if (em) info = { email: em, azp: "" };
     }
   } catch (err) {
     info = null;
   }
   cache.put(key, info === null ? "null" : JSON.stringify(info), ttl);
   return info;
-}
-
-// Verificación anterior (userinfo): solo correo.
-function verificarTokenUserinfo_(token) {
-  try {
-    const res = UrlFetchApp.fetch(
-      "https://www.googleapis.com/oauth2/v3/userinfo?access_token=" + encodeURIComponent(token),
-      { muteHttpExceptions: true }
-    );
-    if (res.getResponseCode() === 200) {
-      const info = JSON.parse(res.getContentText());
-      return info.email ? String(info.email).trim().toLowerCase() : null;
-    }
-  } catch (err) {}
-  return null;
 }
 
 // ¿El correo está en la hoja USUARIOS AUTORIZADOS (columna A, desde fila 2)?

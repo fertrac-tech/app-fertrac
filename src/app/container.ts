@@ -32,10 +32,20 @@ export function createContainer(config: AppConfig): Container {
 
   if (config.dataSource === 'appsscript') {
     device = new BrowserDeviceIdentity();
-    auth = new GoogleAuthProvider({ clientId: config.googleClientId, allowedDomain: config.allowedDomain });
-    source = new AppsScriptCatalogSource(
-      new AppsScriptClient({ baseUrl: config.appsScriptUrl, appVersion: config.version, device, getToken }),
-    );
+    const client = new AppsScriptClient({
+      baseUrl: config.appsScriptUrl,
+      appVersion: config.version,
+      device,
+      getToken,
+      onSessionRotated: (grant) => holder.session?.rotate(grant.token, grant.expiresAt),
+    });
+    auth = new GoogleAuthProvider({
+      clientId: config.googleClientId,
+      allowedDomain: config.allowedDomain,
+      // SEC-01: el ID token de Google se canjea en el backend por un token de dispositivo firmado.
+      exchange: (idToken, integrity) => client.createSession(idToken, integrity),
+    });
+    source = new AppsScriptCatalogSource(client);
   } else {
     device = new MockDeviceIdentity();
     auth = new MockAuthProvider();

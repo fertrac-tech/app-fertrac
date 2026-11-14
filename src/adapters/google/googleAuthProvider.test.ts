@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SignInError } from '@/ports';
-import { GoogleAuthProvider, SESSION_STORAGE_KEY, type GoogleIdentityServices, type NativeGoogleAuthPlugin } from './googleAuthProvider';
+import { AccessDeniedError, SignInError, type Session, type SessionGrant } from '@/ports';
+import {
+  GoogleAuthProvider,
+  SESSION_STORAGE_KEY,
+  type CredentialResponse,
+  type GoogleIdApi,
+  type NativeGoogleAuthPlugin,
+  type NativeIntegrityPlugin,
+  type PromptNotification,
+} from './googleAuthProvider';
 
 function memoryStorage() {
   const data = new Map<string, string>();
@@ -12,101 +20,195 @@ function memoryStorage() {
   };
 }
 
-function fakeGis(response: object, seen: { config?: Record<string, unknown>; overrides?: unknown } = {}): GoogleIdentityServices {
-  return {
-    initTokenClient: (config) => {
-      seen.config = config as unknown as Record<string, unknown>;
-      return { requestAccessToken: (overrides) => { seen.overrides = overrides; config.callback(response); } };
+/** JWT sin firma válida: el cliente solo lee claims para UX; la firma la verifica el backend. */
+function idToken(claims: Record<string, unknown>): string {
+  const enc = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${enc({ alg: 'RS256', kid: 'k' })}.${enc(claims)}.firma`;
+}
+
+interface FakeGis extends GoogleIdApi {
+  configs: Record<string, unknown>[];
+  /** Simula que el usuario pulsa el botón oficial. */
+  click(credential: string): void;
+  disableAutoSelect: ReturnType<typeof vi.fn<() => void>>;
+}
+function fakeGis(promptResult: { credential?: string; notification?: PromptNotification } = {}): FakeGis {
+  let callback: ((r: CredentialResponse) => void) | null = null;
+  const gis: FakeGis = {
+    configs: [],
+    initialize(config) {
+      gis.configs.push(config as unknown as Record<string, unknown>);
+      callback = config.callback;
+    },
+    renderButton: vi.fn(),
+    prompt(listener) {
+      if (promptResult.notification) listener?.(promptResult.notification);
+      else if (promptResult.credential) callback?.({ credential: promptResult.credential });
+    },
+    disableAutoSelect: vi.fn<() => void>(),
+    click(credential) {
+      callback?.({ credential });
     },
   };
+  return gis;
 }
 
-const profile = (body: object) => vi.fn(async () => new Response(JSON.stringify(body)));
+const grant = (over: Partial<SessionGrant> = {}): SessionGrant => ({
+  token: 'st1.payload.firma',
+  expiresAt: 9_000,
+  user: { email: 'david@fertrac.com', name: 'David Torres', picture: 'https://lh3/foto' },
+  ...over,
+});
 
-function provider(opts: { gis?: GoogleIdentityServices; fetchFn?: typeof fetch; native?: NativeGoogleAuthPlugin | null; storage?: ReturnType<typeof memoryStorage> }) {
-  return new GoogleAuthProvider({
+function provider(opts: {
+  gis?: GoogleIdApi;
+  native?: NativeGoogleAuthPlugin | null;
+  integrity?: NativeIntegrityPlugin | null;
+  storage?: ReturnType<typeof memoryStorage>;
+  exchange?: (idToken: string, integrity?: string) => Promise<SessionGrant>;
+}) {
+  const exchange = vi.fn(opts.exchange ?? (async () => grant()));
+  const auth = new GoogleAuthProvider({
     clientId: 'client-id',
     allowedDomain: 'fertrac.com',
+    exchange,
     storage: opts.storage ?? memoryStorage(),
-    fetchFn: opts.fetchFn,
-    now: () => 1_000,
-    loadGis: async () => opts.gis ?? fakeGis({}),
+    loadGis: async () => opts.gis ?? fakeGis(),
     nativePlugin: () => opts.native ?? null,
+    integrityPlugin: () => opts.integrity ?? null,
+    silentTimeoutMs: 50,
   });
+  return { auth, exchange };
 }
 
-describe('GoogleAuthProvider (web)', () => {
-  it('inicia sesión, trae nombre, correo y foto de Google y guarda la sesión', async () => {
+const tick = () => new Promise((r) => setTimeout(r, 0));
+const davidToken = idToken({ email: 'David@Fertrac.com', hd: 'fertrac.com', name: 'David' });
+
+describe('GoogleAuthProvider (web, ID token)', () => {
+  it('el botón oficial entrega el ID token, se canjea en el backend y se guarda solo el token de dispositivo', async () => {
     const storage = memoryStorage();
-    const seen: { config?: Record<string, unknown> } = {};
-    const auth = provider({
-      storage,
-      gis: fakeGis({ access_token: 'tok', expires_in: 3600 }, seen),
-      fetchFn: profile({ email: 'David@Fertrac.com', name: 'David Torres', picture: 'https://lh3/foto' }),
-    });
-    const session = await auth.signIn();
+    const gis = fakeGis();
+    const { auth, exchange } = provider({ storage, gis });
+    const results: Promise<Session>[] = [];
+    expect(auth.mountButton(document.createElement('div'), (p) => { p.catch(() => undefined); results.push(p); })).toBe(true);
+    await tick();
+    expect(gis.renderButton).toHaveBeenCalled();
+    expect(gis.configs[0]).toMatchObject({ client_id: 'client-id', hd: 'fertrac.com' });
+
+    gis.click(davidToken);
+    const session = await results[0];
+    expect(exchange).toHaveBeenCalledWith(davidToken, undefined);
     expect(session).toEqual({
       user: { email: 'david@fertrac.com', name: 'David Torres', picture: 'https://lh3/foto' },
-      token: 'tok',
-      expiresAt: 1_000 + 3_600_000,
+      token: 'st1.payload.firma',
+      expiresAt: 9_000,
     });
-    expect(seen.config).toMatchObject({ client_id: 'client-id', hd: 'fertrac.com' });
+    expect(storage.data.get(SESSION_STORAGE_KEY)).not.toContain(davidToken);
     expect(await auth.restore()).toEqual(session);
   });
 
-  it('rechaza cuentas fuera del dominio corporativo y no guarda sesión', async () => {
+  it('rechaza cuentas fuera del dominio corporativo sin llamar al backend', async () => {
+    const gis = fakeGis();
+    const { auth, exchange } = provider({ gis });
+    const results: Promise<Session>[] = [];
+    auth.mountButton(document.createElement('div'), (p) => { p.catch(() => undefined); results.push(p); });
+    await tick();
+    gis.click(idToken({ email: 'alguien@gmail.com' }));
+    await expect(results[0]).rejects.toMatchObject({ code: 'dominio_no_permitido' });
+    expect(exchange).not.toHaveBeenCalled();
+  });
+
+  it('propaga el rechazo del backend (p. ej. cuenta fuera de la lista blanca)', async () => {
+    const gis = fakeGis();
+    const { auth } = provider({ gis, exchange: async () => { throw new AccessDeniedError('no_autorizado'); } });
+    const results: Promise<Session>[] = [];
+    auth.mountButton(document.createElement('div'), (p) => { p.catch(() => undefined); results.push(p); });
+    await tick();
+    gis.click(davidToken);
+    await expect(results[0]).rejects.toBeInstanceOf(AccessDeniedError);
+  });
+
+  it('renueva en silencio con One Tap (auto_select) y la misma cuenta', async () => {
+    const gis = fakeGis({ credential: davidToken });
+    const { auth } = provider({ gis });
+    const current: Session = { user: { email: 'david@fertrac.com', name: 'D', picture: null }, token: 'st1.viejo.x', expiresAt: 0 };
+    expect((await auth.refresh(current))?.token).toBe('st1.payload.firma');
+    expect(gis.configs.at(-1)).toMatchObject({ auto_select: true, login_hint: 'david@fertrac.com' });
+  });
+
+  it('la renovación falla si Google no muestra One Tap o devuelve otra cuenta', async () => {
+    const current: Session = { user: { email: 'david@fertrac.com', name: 'D', picture: null }, token: 'st1.v.x', expiresAt: 0 };
+    const skipped = provider({ gis: fakeGis({ notification: { isSkippedMoment: () => true } }) });
+    expect(await skipped.auth.refresh(current)).toBeNull();
+    const other = provider({ gis: fakeGis({ credential: davidToken }), exchange: async () => grant({ user: { email: 'otro@fertrac.com' } }) });
+    expect(await other.auth.refresh(current)).toBeNull();
+    const silent = provider({ gis: fakeGis({}) });
+    expect(await silent.auth.refresh(current)).toBeNull();
+  });
+
+  it('descarta sesiones de la versión anterior (access token) y datos corruptos', async () => {
     const storage = memoryStorage();
-    const auth = provider({ storage, gis: fakeGis({ access_token: 'tok' }), fetchFn: profile({ email: 'alguien@gmail.com' }) });
-    await expect(auth.signIn()).rejects.toMatchObject({ code: 'dominio_no_permitido' });
-    expect(storage.data.has(SESSION_STORAGE_KEY)).toBe(false);
-  });
-
-  it('informa cancelación del usuario', async () => {
-    const auth = provider({ gis: fakeGis({ error: 'access_denied' }) });
-    const error = await auth.signIn().catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(SignInError);
-    expect((error as SignInError).code).toBe('cancelado');
-  });
-
-  it('sin foto en la cuenta deja picture en null', async () => {
-    const auth = provider({ gis: fakeGis({ access_token: 't' }), fetchFn: profile({ email: 'a@fertrac.com', name: 'A' }) });
-    expect((await auth.signIn()).user.picture).toBeNull();
-  });
-
-  it('renueva en silencio con la misma cuenta', async () => {
-    const seen: { overrides?: unknown } = {};
-    const auth = provider({ gis: fakeGis({ access_token: 'nuevo' }, seen), fetchFn: profile({ email: 'a@fertrac.com', name: 'A' }) });
-    const current = { user: { email: 'a@fertrac.com', name: 'A', picture: null }, token: 'viejo', expiresAt: 0 };
-    expect((await auth.refresh(current))?.token).toBe('nuevo');
-    expect(seen.overrides).toEqual({ prompt: '', hint: 'a@fertrac.com' });
-  });
-
-  it('la renovación falla si Google devuelve otra cuenta', async () => {
-    const auth = provider({ gis: fakeGis({ access_token: 'x' }), fetchFn: profile({ email: 'otro@fertrac.com' }) });
-    const current = { user: { email: 'a@fertrac.com', name: 'A', picture: null }, token: 'viejo', expiresAt: 0 };
-    expect(await auth.refresh(current)).toBeNull();
-  });
-
-  it('signOut borra la sesión; restore ignora datos corruptos', async () => {
-    const storage = memoryStorage();
-    const auth = provider({ storage, gis: fakeGis({ access_token: 't' }), fetchFn: profile({ email: 'a@fertrac.com' }) });
-    await auth.signIn();
-    await auth.signOut();
+    const { auth } = provider({ storage });
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ user: { email: 'a@fertrac.com' }, token: 'ya29.access', expiresAt: 1 }));
     expect(await auth.restore()).toBeNull();
     storage.setItem(SESSION_STORAGE_KEY, '{no-json');
     expect(await auth.restore()).toBeNull();
   });
+
+  it('persist guarda el token rotado; signOut lo borra y desactiva la selección automática', async () => {
+    const storage = memoryStorage();
+    const gis = fakeGis({ credential: davidToken });
+    const { auth } = provider({ storage, gis });
+    const session = await auth.signIn();
+    auth.persist({ ...session, token: 'st1.rotado.x' });
+    expect((await auth.restore())?.token).toBe('st1.rotado.x');
+    await auth.signOut();
+    expect(await auth.restore()).toBeNull();
+    expect(gis.disableAutoSelect).toHaveBeenCalled();
+  });
+
+  it('informa cuando Google no está disponible', async () => {
+    const auth = new GoogleAuthProvider({
+      clientId: 'c', allowedDomain: 'fertrac.com', exchange: async () => grant(), storage: memoryStorage(),
+      loadGis: async () => { throw new SignInError('no_disponible'); }, nativePlugin: () => null,
+    });
+    const results: Promise<Session>[] = [];
+    auth.mountButton(document.createElement('div'), (p) => { p.catch(() => undefined); results.push(p); });
+    await tick();
+    await expect(results[0]).rejects.toMatchObject({ code: 'no_disponible' });
+  });
 });
 
 describe('GoogleAuthProvider (APK Android)', () => {
-  it('usa el plugin nativo y toma la foto del idToken', async () => {
-    const claims = btoa(JSON.stringify({ email: 'ana@fertrac.com', name: 'Ana Ruiz', picture: 'https://lh3/ana' }));
+  const anaToken = idToken({ email: 'ana@fertrac.com', name: 'Ana Ruiz', picture: 'https://lh3/ana' });
+
+  it('usa el plugin nativo, canjea el idToken y no monta el botón web', async () => {
     const native: NativeGoogleAuthPlugin = {
       initialize: vi.fn(),
-      signIn: async () => ({ authentication: { accessToken: 'nat', idToken: `x.${claims}.y`, expires_in: 60 } }),
+      signIn: async () => ({ authentication: { accessToken: 'nat', idToken: anaToken } }),
     };
-    const session = await provider({ native }).signIn();
+    const { auth, exchange } = provider({ native, exchange: async () => grant({ user: {} }) });
+    expect(auth.mountButton(document.createElement('div'), () => {})).toBe(false);
+    const session = await auth.signIn();
     expect(native.initialize).toHaveBeenCalledWith({ clientId: 'client-id', scopes: ['email', 'profile'], grantOfflineAccess: false });
-    expect(session).toMatchObject({ user: { email: 'ana@fertrac.com', name: 'Ana Ruiz', picture: 'https://lh3/ana' }, token: 'nat', expiresAt: 61_000 });
+    expect(exchange).toHaveBeenCalledWith(anaToken, undefined);
+    expect(session.user).toEqual({ email: 'ana@fertrac.com', name: 'Ana Ruiz', picture: 'https://lh3/ana' });
+  });
+
+  it('adjunta el token de Play Integrity ligado al ID token cuando la APK trae el plugin', async () => {
+    const native: NativeGoogleAuthPlugin = { initialize: vi.fn(), signIn: async () => ({ authentication: { idToken: anaToken } }) };
+    const requestToken = vi.fn(async (_: { requestHash: string }) => ({ token: 'integridad-123' }));
+    const { auth, exchange } = provider({ native, integrity: { requestToken } });
+    await auth.signIn();
+    expect(exchange).toHaveBeenCalledWith(anaToken, 'integridad-123');
+    expect(requestToken.mock.calls[0]?.[0].requestHash).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('renueva con el idToken del plugin; sin idToken no hay renovación', async () => {
+    const current: Session = { user: { email: 'ana@fertrac.com', name: 'A', picture: null }, token: 'st1.v.x', expiresAt: 0 };
+    const ok = provider({ native: { initialize: vi.fn(), signIn: vi.fn(), refresh: async () => ({ idToken: anaToken }) }, exchange: async () => grant({ user: {} }) });
+    expect((await ok.auth.refresh(current))?.token).toBe('st1.payload.firma');
+    const none = provider({ native: { initialize: vi.fn(), signIn: vi.fn(), refresh: async () => ({ accessToken: 'solo-access' }) } });
+    expect(await none.auth.refresh(current)).toBeNull();
   });
 });
