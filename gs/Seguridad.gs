@@ -365,6 +365,11 @@ function verificarIntegridadPlay_(tokenIntegridad, requestHashEsperado) {
 // Nota: Apps Script NO expone la IP del cliente; la huella usa los datos de la
 // petición. Para alertas por IP se requiere un proxy (p. ej. Cloudflare Worker).
 // ============================================================
+// Huella visible del dispositivo: plataforma | modelo o navegador (la declara el cliente).
+function huellaDispositivo_(params) {
+  return (_aclTxt_(params.plat) + "|" + _aclTxt_(params.modelo)).slice(0, 160);
+}
+
 function vigilarUsoDispositivo_(email, device, params, esInicioSesion) {
   try {
     const cfg = CONFIG.ALERTAS_DISPOSITIVO;
@@ -382,7 +387,7 @@ function vigilarUsoDispositivo_(email, device, params, esInicioSesion) {
     r.em = limpiar(r.em); r.fp = limpiar(r.fp);
     r.ses = (r.ses || []).filter(function (t) { return ahora - t < ventanaMs; });
 
-    const huella = (_aclTxt_(params.plat) + "|" + _aclTxt_(params.modelo)).slice(0, 120);
+    const huella = huellaDispositivo_(params);
     r.em[email] = ahora;
     r.fp[huella] = ahora;
     if (esInicioSesion) r.ses.push(ahora);
@@ -410,6 +415,7 @@ function emitirAlertaDispositivo_(tipo, detalle, email, device) {
 
   let bloqueado = false;
   if (cfg.AUTO_BLOQUEAR) bloqueado = bloquearDispositivoPorAlerta_(device, tipo);
+  registrarAlertaEnHoja_(tipo, email, device, detalle, bloqueado ? "BLOQUEADO automáticamente" : "Pendiente de revisión");
 
   try {
     const asunto = "ALERTA de seguridad: dispositivo " + codigo + " (" + tipo + ")";
@@ -421,6 +427,26 @@ function emitirAlertaDispositivo_(tipo, detalle, email, device) {
     GmailApp.sendEmail(CONFIG.APROBADORES_DISPOSITIVOS.join(","), asunto, cuerpo);
   } catch (err) {
     console.warn("emitirAlertaDispositivo_: " + err.message);
+  }
+}
+
+// Hoja ALERTAS_DISPOSITIVOS (se crea sola): una fila por alerta, con las huellas o correos detectados.
+const ALERTA_COLS = ["FECHA", "TIPO", "EMAIL", "CODIGO", "DEVICE_ID", "DETALLE", "ACCION", "REVISADO_POR", "NOTA"];
+function registrarAlertaEnHoja_(tipo, email, device, detalle, accion) {
+  try {
+    const ss = SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR);
+    let sh = ss.getSheetByName(CONFIG.SHEET_ALERTAS);
+    if (!sh) {
+      sh = ss.insertSheet(CONFIG.SHEET_ALERTAS);
+      sh.getRange(1, 1, 1, ALERTA_COLS.length).setValues([ALERTA_COLS]).setFontWeight("bold");
+      sh.setFrozenRows(1);
+    }
+    sh.appendRow([
+      new Date(), tipo, _aclCelda_(email, 120), device.slice(-6).toUpperCase(), _aclCelda_(device, 90),
+      _aclCelda_(detalle, 1000), accion, "", ""
+    ]);
+  } catch (err) {
+    console.warn("registrarAlertaEnHoja_: " + err.message);
   }
 }
 

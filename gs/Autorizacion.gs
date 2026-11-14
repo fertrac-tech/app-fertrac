@@ -37,7 +37,7 @@ const ACL_RE_DEVICE      = /^(and|web)-[A-Za-z0-9_-]{8,80}$/;
 
 const DISP_COLS = [
   "EMAIL", "DEVICE_ID", "CANAL", "PLATAFORMA", "MODELO", "VERSION_APP", "FECHA_REGISTRO",
-  "ULTIMO_USO", "ESTADO", "APROBADO_POR", "FECHA_APROBACION", "NOTA", "AZP"
+  "ULTIMO_USO", "ESTADO", "APROBADO_POR", "FECHA_APROBACION", "NOTA", "AZP", "HUELLA"
 ];
 const DC = {};                                   // nombre → número de columna (1-based)
 DISP_COLS.forEach(function (c, i) { DC[c] = i + 1; });
@@ -224,7 +224,7 @@ function evaluarAccesoDispositivo_(email, azp, params) {
     const aprobados = lista.filter(function (x) { return x.estado === "APROBADO" && x.canal === canal; }).length;
     return r(aprobados >= maxPorCanal_(canal) ? "dispositivo_limite" : "dispositivo_pendiente");
   }
-  marcarUsoDispositivo_(d);
+  marcarUsoDispositivo_(d, params);
   return r("ok");
 }
 
@@ -283,7 +283,7 @@ function registrarDispositivo_(email, device, canal, azp, params) {
     sh.appendRow([
       email, device, canal,
       _aclCelda_(params.plat, 30), _aclCelda_(params.modelo, 80), _aclCelda_(params.ver, 20),
-      ahora, ahora, "PENDIENTE", "", "", "", _aclCelda_(azp, 100)
+      ahora, ahora, "PENDIENTE", "", "", "", _aclCelda_(azp, 100), _aclCelda_(huellaDispositivo_(params), 160)
     ]);
     SpreadsheetApp.flush();
     const fila = sh.getLastRow();
@@ -370,22 +370,37 @@ function notificarDispositivoNuevo_(email, device, canal, params, sh) {
   }
 }
 
-// ULTIMO_USO con throttle. Verifica que la fila siga siendo la del dispositivo
-// (si alguien ordenó o borró filas, invalida la caché y no escribe).
-function marcarUsoDispositivo_(d) {
+// ULTIMO_USO + HUELLA. ULTIMO_USO con throttle (1 escritura/dispositivo/hora); la HUELLA
+// (plataforma | modelo/navegador) se escribe en cuanto cambia, para que la hoja muestre desde
+// dónde se está usando el dispositivo (ver alertas en gs/Seguridad.gs).
+// Verifica que la fila siga siendo la del dispositivo (si alguien ordenó o borró filas,
+// invalida la caché y no escribe).
+function marcarUsoDispositivo_(d, params) {
   try {
     const cache = CacheService.getScriptCache();
     const k = "acl_uso_" + d.id;
-    if (cache.get(k)) return;
-    cache.put(k, "1", ACL_TTL_USO);
+    const huella = _aclCelda_(huellaDispositivo_(params || {}), 160);
+    if (cache.get(k) === huella) return;                       // misma huella dentro de la hora
+    cache.put(k, huella, ACL_TTL_USO);
     const sh = hojaDispositivos_(false);
     if (!sh || d.fila > sh.getLastRow()) { cacheRemoveGrande_(cache, ACL_CACHE_DISP); return; }
     if (_aclTxt_(sh.getRange(d.fila, DC.DEVICE_ID).getValue()) !== d.id) {
       cacheRemoveGrande_(cache, ACL_CACHE_DISP);
       return;
     }
+    asegurarEncabezadoHuella_(sh);
     sh.getRange(d.fila, DC.ULTIMO_USO).setValue(new Date());
+    if (huella) sh.getRange(d.fila, DC.HUELLA).setValue(huella);
   } catch (err) {}
+}
+
+// Hojas DISPOSITIVOS creadas antes de la columna HUELLA: agrega el encabezado una sola vez.
+function asegurarEncabezadoHuella_(sh) {
+  const cache = CacheService.getScriptCache();
+  if (cache.get("acl_hdr_huella")) return;
+  const celda = sh.getRange(1, DC.HUELLA);
+  if (_aclTxt_(celda.getValue()) !== "HUELLA") celda.setValue("HUELLA").setFontWeight("bold");
+  cache.put("acl_hdr_huella", "1", 21600);
 }
 
 // ============================================================

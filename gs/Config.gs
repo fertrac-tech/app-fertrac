@@ -22,6 +22,7 @@ const CONFIG = {
   SHEET_ACTIVIDAD:  "ACTIVIDAD_USUARIOS",
   SHEET_LOG:        "Log App",
   SHEET_DISPOSITIVOS: "DISPOSITIVOS",
+  SHEET_ALERTAS:      "ALERTAS_DISPOSITIVOS",   // alertas de uso compartido (gs/Seguridad.gs)
 
   // ── Log de errores (Log App) ──
   LOG_TTL_DEDUPE:   3600,   // segundos: no repetir el mismo error (módulo+mensaje) en la hoja
