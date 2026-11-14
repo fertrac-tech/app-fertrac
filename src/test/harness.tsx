@@ -73,7 +73,7 @@ export function renderApp(options: Options = {}) {
   const container: Container = {
     config: {
       dataSource: 'mock', appsScriptUrl: '', googleClientId: '', allowedDomain: 'fertrac.com',
-      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0',
+      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0', offlineMaxHours: 24,
     },
     catalog,
     session: new SessionController(auth, catalog, device),

@@ -194,4 +194,34 @@ describe('SessionController — seguridad en tres capas', () => {
     await c.sync();
     expect(c.getState()).toMatchObject({ status: 'signedOut', notice: { title: 'Tu sesión expiró' } });
   });
+
+  it('SEC-05: sin conexión, la copia local se borra al cumplir 24 h aunque la app siga abierta', async () => {
+    const H = 3_600_000;
+    let fire: (() => void) | null = null;
+    let wait = 0;
+    const catalog = fakeCatalog(['red'], 0);
+    const c = new SessionController(fakeAuth({ restore: async () => session }), catalog, device, {
+      offlineMaxAgeMs: 24 * H,
+      now: () => 20 * H,
+      setTimer: (fn, ms) => { fire = fn; wait = ms; return 1; },
+      clearTimer: () => { fire = null; },
+    });
+    await c.start();
+    expect(c.getState()).toMatchObject({ status: 'ready', offline: true, lastSyncedAt: 0 });
+    expect(wait).toBe(4 * H + 1000);
+    fire!();
+    await vi.waitFor(() => expect(c.getState()).toMatchObject({ status: 'ready', offline: true, lastSyncedAt: null, syncError: expect.stringContaining('24 h') }));
+    expect(catalog.clear).toHaveBeenCalled();
+  });
+
+  it('SEC-05: una sincronización exitosa cancela el borrado programado', async () => {
+    const clearTimer = vi.fn();
+    const c = new SessionController(fakeAuth({ restore: async () => session }), fakeCatalog(['red', 'ok'], 0), device, {
+      offlineMaxAgeMs: 1000, now: () => 0, setTimer: () => 7, clearTimer,
+    });
+    await c.start();
+    await c.sync();
+    expect(clearTimer).toHaveBeenCalledWith(7);
+    expect(c.getState()).toMatchObject({ status: 'ready', offline: false });
+  });
 });

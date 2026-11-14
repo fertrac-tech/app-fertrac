@@ -54,8 +54,10 @@ export function createContainer(config: AppConfig): Container {
 
   // Cada entorno guarda su copia en una base distinta: demo y staging nunca pisan producción.
   const suffix = config.dataSource === 'mock' ? '_demo' : config.environmentLabel ? `_${config.environmentLabel.toLowerCase()}` : '';
-  const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`));
-  const session = new SessionController(auth, catalog, device);
+  // SEC-05: la copia local del catálogo vence a las `offlineMaxHours` (24 h) sin sincronizar.
+  const offlineMaxAgeMs = config.offlineMaxHours * 3_600_000;
+  const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`), Date.now, offlineMaxAgeMs);
+  const session = new SessionController(auth, catalog, device, { offlineMaxAgeMs });
   holder.session = session;
   const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`));
 

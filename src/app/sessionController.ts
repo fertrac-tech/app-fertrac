@@ -23,6 +23,20 @@ export type AppState =
 
 type Listener = () => void;
 
+export interface SessionOptions {
+  /** SEC-05: vida máxima de la copia local sin sincronizar (ms). */
+  offlineMaxAgeMs?: number;
+  setTimer?: (fn: () => void, ms: number) => unknown;
+  clearTimer?: (handle: unknown) => void;
+  now?: () => number;
+}
+
+/** Sin copia vigente: nunca se sincronizó o venció y se borró del equipo. */
+export function offlineExpiredMessage(maxAgeMs: number): string {
+  const hours = Math.round(maxAgeMs / 3_600_000);
+  return `No hay una copia vigente del catálogo en este equipo (se borra a las ${hours} h sin sincronizar). Conéctate y pulsa "Sincronizar".`;
+}
+
 /**
  * Orquesta sesión + seguridad en tres capas + sincronización del catálogo.
  * No conoce React ni el backend concreto: solo los puertos.
@@ -33,11 +47,13 @@ export class SessionController {
   private session: Session | null = null;
   private catalogVersion = 0;
   private channel: Channel | null = null;
+  private expiryTimer: unknown = null;
 
   constructor(
     private readonly auth: AuthProvider,
     private readonly catalog: CatalogRepository,
     private readonly device: DeviceIdentity,
+    private readonly options: SessionOptions = {},
   ) {}
 
   getState = (): AppState => this.state;
@@ -112,6 +128,7 @@ export class SessionController {
   }
 
   async signOut(): Promise<void> {
+    this.cancelExpiry();
     await this.auth.signOut();
     await this.catalog.clear().catch(() => undefined);
     this.session = null;
@@ -138,6 +155,7 @@ export class SessionController {
     const deviceCode = await this.deviceCode();
     try {
       const result = await this.catalog.sync();
+      this.cancelExpiry();
       this.catalogVersion += 1;
       this.set({ status: 'ready', session, deviceCode, channel: this.channel, syncing: false, lastSyncedAt: result.syncedAt, offline: false, syncError: null, catalogVersion: this.catalogVersion });
     } catch (error) {
@@ -175,6 +193,35 @@ export class SessionController {
 
   private async showLocalCopy(session: Session, deviceCode: string, syncError: string): Promise<void> {
     const lastSyncedAt = await this.catalog.lastSyncedAt().catch(() => null);
-    this.set({ status: 'ready', session, deviceCode, channel: this.channel, syncing: false, lastSyncedAt, offline: true, syncError, catalogVersion: this.catalogVersion });
+    // Sin copia vigente (nunca hubo o venció a las 24 h) se explica por qué el catálogo está vacío.
+    const maxAge = this.options.offlineMaxAgeMs;
+    const message = lastSyncedAt === null && maxAge !== undefined ? offlineExpiredMessage(maxAge) : syncError;
+    this.set({ status: 'ready', session, deviceCode, channel: this.channel, syncing: false, lastSyncedAt, offline: true, syncError: message, catalogVersion: this.catalogVersion });
+    this.scheduleExpiry(lastSyncedAt);
+  }
+
+  /** SEC-05: si la app sigue abierta sin conexión, borra la copia al cumplir su vida máxima. */
+  private scheduleExpiry(lastSyncedAt: number | null): void {
+    this.cancelExpiry();
+    const maxAge = this.options.offlineMaxAgeMs;
+    if (maxAge === undefined || lastSyncedAt === null) return;
+    const now = (this.options.now ?? Date.now)();
+    const wait = Math.max(0, lastSyncedAt + maxAge - now) + 1000;
+    const setTimer = this.options.setTimer ?? ((fn: () => void, ms: number) => setTimeout(fn, Math.min(ms, 2 ** 31 - 1)));
+    this.expiryTimer = setTimer(() => void this.expireLocalCopy(), wait);
+  }
+
+  private cancelExpiry(): void {
+    if (this.expiryTimer === null) return;
+    (this.options.clearTimer ?? ((h: unknown) => clearTimeout(h as ReturnType<typeof setTimeout>)))(this.expiryTimer);
+    this.expiryTimer = null;
+  }
+
+  private async expireLocalCopy(): Promise<void> {
+    this.expiryTimer = null;
+    if (this.state.status !== 'ready' || !this.state.offline) return;
+    await this.catalog.clear().catch(() => undefined);
+    this.catalogVersion += 1;
+    this.set({ ...this.state, lastSyncedAt: null, syncError: offlineExpiredMessage(this.options.offlineMaxAgeMs ?? 0), catalogVersion: this.catalogVersion });
   }
 }

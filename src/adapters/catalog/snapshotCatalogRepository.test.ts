@@ -69,4 +69,31 @@ describe('SnapshotCatalogRepository', () => {
     await expect(repo.sync()).resolves.toMatchObject({ count: 3 });
     expect((await repo.query({})).total).toBe(3);
   });
+
+  describe('SEC-05 · vida máxima de la copia local (24 h)', () => {
+    const H = 3_600_000;
+
+    it('al abrir sin conexión, una copia de más de 24 h se borra del dispositivo', async () => {
+      const store = memoryStore({ products, syncedAt: 0 });
+      const repo = new SnapshotCatalogRepository({ fetchAll: vi.fn() }, store, () => 24 * H + 1, 24 * H);
+      expect((await repo.query({})).total).toBe(0);
+      expect(await repo.lastSyncedAt()).toBeNull();
+      expect(store.current).toBeNull();
+    });
+
+    it('una copia de menos de 24 h se usa normalmente', async () => {
+      const repo = new SnapshotCatalogRepository({ fetchAll: vi.fn() }, memoryStore({ products, syncedAt: 0 }), () => 23 * H, 24 * H);
+      expect((await repo.query({})).total).toBe(3);
+    });
+
+    it('con la app abierta, la copia en memoria también vence', async () => {
+      let now = 0;
+      const store = memoryStore();
+      const repo = new SnapshotCatalogRepository({ fetchAll: async () => products }, store, () => now, 24 * H);
+      await repo.sync();
+      now = 24 * H + 1;
+      expect((await repo.query({})).total).toBe(0);
+      expect(store.current).toBeNull();
+    });
+  });
 });
