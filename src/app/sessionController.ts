@@ -182,7 +182,8 @@ export class SessionController {
       return this.set({ status: 'signedOut', notice: accessMessage(code), busy: false });
     }
 
-    if (verdict.failedLayer === 'whitelist') {
+    // Fuera de lista o suspendido → login. Solicitud PENDIENTE → pantalla con código y "Reintentar".
+    if (verdict.failedLayer === 'whitelist' && !verdict.retryable) {
       await this.auth.signOut();
       this.session = null;
       return this.set({ status: 'signedOut', notice: accessMessage(code), busy: false });

@@ -73,6 +73,18 @@ describe('SessionController — seguridad en tres capas', () => {
     expect(c.getState().status).toBe('ready');
   });
 
+  it('cuenta nueva (solicitud de acceso pendiente): pantalla con código y Reintentar, no vuelve al login', async () => {
+    const auth = fakeAuth();
+    const catalog = fakeCatalog(['usuario_pendiente', 'ok']);
+    const c = new SessionController(auth, catalog, device);
+    await c.start();
+    await c.signIn();
+    expect(c.getState()).toMatchObject({ status: 'blocked', code: 'usuario_pendiente', deviceCode: 'A3F9K2' });
+    expect(auth.signOut).not.toHaveBeenCalled();
+    await c.retry();
+    expect(c.getState().status).toBe('ready');
+  });
+
   it.each(['dispositivo_bloqueado', 'dispositivo_limite', 'canal_no_autorizado', 'web_android_no_permitido'] as const)(
     '%s bloquea el ingreso',
     async (code) => {

@@ -44,7 +44,9 @@ DISP_COLS.forEach(function (c, i) { DC[c] = i + 1; });
 
 const ESTADOS_DISP    = ["PENDIENTE", "APROBADO", "BLOQUEADO"];
 const CANALES_USUARIO = ["APP", "WEB", "AMBOS"];
-const ESTADOS_USUARIO = ["ACTIVO", "SUSPENDIDO"];
+const ESTADOS_USUARIO = ["ACTIVO", "PENDIENTE", "SUSPENDIDO"];
+// Estados de USUARIO que bloquean SIEMPRE (también en modo observación de dispositivos).
+const ACL_BLOQUEAN_SIEMPRE = ["no_autorizado", "usuario_pendiente", "usuario_suspendido"];
 
 // ── Normalizadores ──
 function _aclTxt_(v) { return String(v === null || v === undefined ? "" : v).trim(); }
@@ -53,7 +55,13 @@ function normCanalUsuario_(v) {
   const c = _aclTxt_(v).toUpperCase();
   return CANALES_USUARIO.indexOf(c) >= 0 ? c : CONFIG.CANAL_POR_DEFECTO;
 }
-function normEstadoUsuario_(v) { return _aclTxt_(v).toUpperCase() === "SUSPENDIDO" ? "SUSPENDIDO" : "ACTIVO"; }
+// Vacío = ACTIVO (compatibilidad con la lista histórica). PENDIENTE y SUSPENDIDO se respetan.
+// Cualquier otro texto se trata como PENDIENTE: un error de digitación nunca concede acceso.
+function normEstadoUsuario_(v) {
+  const e = _aclTxt_(v).toUpperCase();
+  if (e === "" || e === "ACTIVO") return "ACTIVO";
+  return e === "SUSPENDIDO" ? "SUSPENDIDO" : "PENDIENTE";
+}
 function normEstadoDisp_(v) {
   const e = _aclTxt_(v).toUpperCase();
   return ESTADOS_DISP.indexOf(e) >= 0 ? e : "PENDIENTE";
@@ -184,13 +192,40 @@ function evaluarAccesoDispositivo_(email, azp, params) {
   email = _aclEmail_(email);
   const device = _aclTxt_(params.device);
   const canal = canalDeSolicitud_(params);
-  const r = function (codigo) { return { ok: codigo === "ok", codigo: codigo, canal: canal, device: device }; };
+  const r = function (codigo, extra) {
+    const o = { ok: codigo === "ok", codigo: codigo, canal: canal, device: device };
+    if (extra) Object.keys(extra).forEach(function (k) { o[k] = extra[k]; });
+    return o;
+  };
+  const dispositivoValido = !!device && ACL_RE_DEVICE.test(device) && !!canal;
 
   const usuarios = leerUsuariosAcl_();
   if (!usuarios) return r("acl_no_disponible");
-  const u = usuarios[email];
-  if (!u) return r("no_autorizado");
+  let u = usuarios[email];
+
+  // Solicitud de acceso automática: cuenta corporativa verificada que no está en la lista →
+  // fila PENDIENTE en USUARIOS AUTORIZADOS (+ dispositivo PENDIENTE y un correo al aprobador).
+  if (!u) {
+    if (!CONFIG.SOLICITUD_ACCESO_AUTOMATICA || !dispositivoValido) return r("no_autorizado");
+    u = registrarUsuarioPendiente_(email, canal);
+    if (!u) return r("no_autorizado");
+  }
   if (u.estado === "SUSPENDIDO") return r("usuario_suspendido");
+
+  // Usuario PENDIENTE: se registra su dispositivo (una vez) para aprobar las dos capas juntas.
+  // Nunca recibe datos: el código se aplica siempre (ver resolverEstadoAcl_).
+  if (u.estado === "PENDIENTE") {
+    if (!dispositivoValido) return r("usuario_pendiente");
+    if (CONFIG.BLOQUEAR_WEB_ANDROID && canal === "WEB" && esAndroidWeb_(params)) return r("web_android_no_permitido", { usuarioPendiente: true });
+    const dispsP = leerDispositivosAcl_();
+    const listaP = (dispsP && dispsP[email]) || [];
+    const yaRegistrado = listaP.some(function (x) { return x.id === device; });
+    const pendientesP = listaP.filter(function (x) { return x.estado === "PENDIENTE"; }).length;
+    if (dispsP && !yaRegistrado && pendientesP < (CONFIG.MAX_PENDIENTES_POR_USUARIO || 3)) {
+      registrarDispositivo_(email, device, canal, azp, params, true);
+    }
+    return r("usuario_pendiente");
+  }
 
   if (!device) return r("dispositivo_requerido");
   if (!ACL_RE_DEVICE.test(device) || !canal) return r("dispositivo_invalido");
@@ -231,7 +266,8 @@ function evaluarAccesoDispositivo_(email, azp, params) {
 // Traduce el veredicto al `estado` de doGet según el modo (observación / cumplimiento).
 function resolverEstadoAcl_(acl, email, azp, params) {
   if (acl.ok) return "ok";
-  if (acl.codigo === "no_autorizado") return "no_autorizado";   // comportamiento previo: siempre activo
+  // Capa USUARIO: fuera de lista, pendiente o suspendido bloquean SIEMPRE (también en observación).
+  if (ACL_BLOQUEAN_SIEMPRE.indexOf(acl.codigo) >= 0 || acl.usuarioPendiente) return acl.codigo;
   const detalle = "azp=" + _aclTxt_(azp) + " plat=" + _aclTxt_(params.plat) + " ver=" + _aclTxt_(params.ver);
   const disp = acl.device ? "…" + acl.device.slice(-6) : "-";
   if (CONFIG.ENFORCE_DISPOSITIVOS) {
@@ -249,6 +285,44 @@ function resolverEstadoAcl_(acl, email, azp, params) {
 // ============================================================
 // REGISTRO Y USO
 // ============================================================
+
+// Agrega la cuenta a USUARIOS AUTORIZADOS con ESTADO = PENDIENTE y CANAL sugerido = el de la
+// solicitud (el aprobador lo cambia: APP = solo Android · WEB = solo web · AMBOS).
+// Exige la columna ESTADO: una fila sin ESTADO se leería como ACTIVO y concedería acceso.
+function registrarUsuarioPendiente_(email, canal) {
+  const lock = LockService.getUserLock();
+  if (!lock.tryLock(3000)) return null;
+  try {
+    const actual = leerUsuariosAcl_(true) || {};
+    if (actual[email]) return actual[email];
+    const sh = SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR).getSheetByName(CONFIG.SHEET_USERS);
+    if (!sh) return null;
+    const enc = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    const iCanal = _colPorEncabezado_(enc, "CANAL");
+    const iEstado = _colPorEncabezado_(enc, "ESTADO");
+    const iNota = _colPorEncabezado_(enc, "NOTA");
+    if (iEstado < 0) {
+      registrarLog_("error", "backend", "acl", "Sin columna ESTADO en " + CONFIG.SHEET_USERS + ": no se registra la solicitud de " + email +
+        ". Ejecute prepararHojasAutorizacion().", "", "", email);
+      return null;
+    }
+    const fila = enc.map(function () { return ""; });
+    fila[0] = email;
+    if (iCanal >= 0) fila[iCanal] = canal;
+    fila[iEstado] = "PENDIENTE";
+    if (iNota >= 0) fila[iNota] = "Solicitud automática desde la app " + Utilities.formatDate(new Date(), "America/Bogota", "yyyy-MM-dd HH:mm");
+    sh.appendRow(fila);
+    SpreadsheetApp.flush();
+    cacheRemoveGrande_(CacheService.getScriptCache(), ACL_CACHE_USUARIOS);
+    registrarLog_("info", "backend", "acl", "SOLICITUD de acceso " + email + " " + canal, "", "", email);
+    return { canal: canal, estado: "PENDIENTE" };
+  } catch (err) {
+    console.warn("registrarUsuarioPendiente_: " + err.message);
+    return null;
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 function hojaDispositivos_(crear) {
   const ss = SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR);
@@ -270,7 +344,7 @@ function _validacionLista_(sh, col, valores) {
 // Registra (email, device) como PENDIENTE y avisa a los aprobadores.
 // Las peticiones del arranque llegan en ráfaga (catálogo + fotos), así que se
 // serializa con getUserLock y se relee la hoja sin caché antes de insertar.
-function registrarDispositivo_(email, device, canal, azp, params) {
+function registrarDispositivo_(email, device, canal, azp, params, usuarioPendiente) {
   const lock = LockService.getUserLock();
   if (!lock.tryLock(3000)) return null;
   try {
@@ -288,7 +362,7 @@ function registrarDispositivo_(email, device, canal, azp, params) {
     SpreadsheetApp.flush();
     const fila = sh.getLastRow();
     cacheRemoveGrande_(CacheService.getScriptCache(), ACL_CACHE_DISP);
-    notificarDispositivoNuevo_(email, device, canal, params, sh);
+    notificarDispositivoNuevo_(email, device, canal, params, sh, !!usuarioPendiente);
     return { id: device, canal: canal, estado: "PENDIENTE", fila: fila };
   } catch (err) {
     console.warn("registrarDispositivo_: " + err.message);
@@ -302,10 +376,17 @@ function registrarDispositivo_(email, device, canal, azp, params) {
 // Se envía con el servicio avanzado Gmail (habilitado en appsscript.json) para
 // marcar prioridad alta (Importance/X-Priority: Outlook y Gmail móvil lo resaltan);
 // si falla, cae a GmailApp con el mismo HTML.
-function notificarDispositivoNuevo_(email, device, canal, params, sh) {
+function notificarDispositivoNuevo_(email, device, canal, params, sh, usuarioPendiente) {
   try {
     const url = "https://docs.google.com/spreadsheets/d/" + CONFIG.ID_BASE_MOTOR + "/edit#gid=" + sh.getSheetId();
-    const asunto = "URGENTE: Aprobación de dispositivo pendiente — " + email;
+    let urlUsuarios = url;
+    try {
+      urlUsuarios = "https://docs.google.com/spreadsheets/d/" + CONFIG.ID_BASE_MOTOR + "/edit#gid=" +
+        SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR).getSheetByName(CONFIG.SHEET_USERS).getSheetId();
+    } catch (eU) {}
+    const asunto = usuarioPendiente
+      ? "URGENTE: Solicitud de acceso (usuario y dispositivo nuevos) — " + email
+      : "URGENTE: Aprobación de dispositivo pendiente — " + email;
     const esc = function (v) {
       return _aclTxt_(v).replace(/[&<>"']/g, function (c) {
         return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
@@ -321,10 +402,13 @@ function notificarDispositivoNuevo_(email, device, canal, params, sh) {
         '<img src="' + CONFIG.LOGO_URL + '" alt="Fertrac" height="56" style="height:56px">' +
       '</div>' +
       '<div style="background:#c62828;color:#fff;padding:12px 20px;font-size:16px;font-weight:bold">' +
-        '⚠️ URGENTE — Dispositivo pendiente de aprobación</div>' +
+        (usuarioPendiente ? '⚠️ URGENTE — Solicitud de acceso: usuario y dispositivo nuevos' : '⚠️ URGENTE — Dispositivo pendiente de aprobación') + '</div>' +
       '<div style="padding:18px 20px;font-size:14px;color:#222;line-height:1.5">' +
-        '<p style="margin:0 0 12px">Un usuario solicita acceso a la <b>Lista de Precios</b> desde un dispositivo nuevo ' +
-        'y no podrá ingresar hasta que se apruebe.</p>' +
+        (usuarioPendiente
+          ? '<p style="margin:0 0 12px">Una cuenta corporativa que <b>no estaba en la lista</b> solicita acceso a la <b>Lista de Precios</b>. ' +
+            'Quedó registrada como <b>PENDIENTE</b> y no verá precios hasta aprobar las <b>dos capas</b>.</p>'
+          : '<p style="margin:0 0 12px">Un usuario solicita acceso a la <b>Lista de Precios</b> desde un dispositivo nuevo ' +
+            'y no podrá ingresar hasta que se apruebe.</p>') +
         '<table style="border-collapse:collapse;font-size:14px;width:100%;background:#fafafa;border-radius:8px">' +
           fila("Usuario", esc(email)) +
           fila("Canal", esc(canal)) +
@@ -335,15 +419,25 @@ function notificarDispositivoNuevo_(email, device, canal, params, sh) {
           fila("Versión app", esc(params.ver)) +
           fila("Límite del canal", maxPorCanal_(canal) + " dispositivo(s) aprobado(s)") +
         '</table>' +
-        '<p style="margin:16px 0 8px">Cambie la columna <b>ESTADO</b> a <b>APROBADO</b> o <b>BLOQUEADO</b> en la hoja ' +
-          esc(CONFIG.SHEET_DISPOSITIVOS) + ' (busque el usuario y el código).</p>' +
+        (usuarioPendiente
+          ? '<p style="margin:16px 0 4px"><b>1. Capa usuario</b> — hoja ' + esc(CONFIG.SHEET_USERS) + ': cambie <b>ESTADO</b> a ' +
+              '<b>ACTIVO</b> (o SUSPENDIDO) y elija <b>CANAL</b>: <b>APP</b> = solo Android · <b>WEB</b> = solo web · <b>AMBOS</b>.</p>' +
+            '<p style="text-align:center;margin:10px 0 14px"><a href="' + urlUsuarios + '" style="background:#F47920;color:#fff;' +
+              'padding:9px 18px;border-radius:6px;text-decoration:none;font-weight:bold">Abrir ' + esc(CONFIG.SHEET_USERS) + '</a></p>' +
+            '<p style="margin:0 0 4px"><b>2. Capa dispositivo</b> — hoja ' + esc(CONFIG.SHEET_DISPOSITIVOS) + ': cambie <b>ESTADO</b> a ' +
+              '<b>APROBADO</b> o <b>BLOQUEADO</b> (busque el usuario y el código).</p>'
+          : '<p style="margin:16px 0 8px">Cambie la columna <b>ESTADO</b> a <b>APROBADO</b> o <b>BLOQUEADO</b> en la hoja ' +
+              esc(CONFIG.SHEET_DISPOSITIVOS) + ' (busque el usuario y el código).</p>') +
         '<p style="text-align:center;margin:18px 0"><a href="' + url + '" style="background:#F47920;color:#fff;' +
           'padding:11px 22px;border-radius:6px;text-decoration:none;font-weight:bold">Abrir hoja DISPOSITIVOS</a></p>' +
         (CONFIG.ENFORCE_DISPOSITIVOS ? "" :
           '<p style="color:#888;font-size:12px;margin:0">Modo observación: el usuario todavía NO está bloqueado.</p>') +
       '</div></div>';
-    const texto = "URGENTE — Dispositivo pendiente de aprobación\n\nUsuario: " + email + "\nCanal: " + canal +
-      "\nCódigo: " + device.slice(-6) + "\nID: " + device + "\n\nHoja: " + url;
+    const texto = (usuarioPendiente
+        ? "URGENTE — Solicitud de acceso (usuario y dispositivo nuevos)\n\n1) " + CONFIG.SHEET_USERS + ": ESTADO = ACTIVO y CANAL = APP (solo Android), WEB (solo web) o AMBOS.\n2) " +
+          CONFIG.SHEET_DISPOSITIVOS + ": ESTADO = APROBADO.\n\n"
+        : "URGENTE — Dispositivo pendiente de aprobación\n\n") +
+      "Usuario: " + email + "\nCanal: " + canal + "\nCódigo: " + device.slice(-6) + "\nID: " + device + "\n\nHoja: " + url;
     const para = CONFIG.APROBADORES_DISPOSITIVOS.join(",");
 
     try {

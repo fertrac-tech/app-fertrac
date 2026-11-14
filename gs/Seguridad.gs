@@ -278,8 +278,9 @@ function instalarTriggerRotacionSecreto() {
 // Códigos que impiden emitir el token. El resto (dispositivo pendiente, límite…)
 // SÍ recibe token: las peticiones de datos devolverán el estado y la app muestra
 // su pantalla (código del dispositivo, reintentar) igual que hoy.
-const SEG_NIEGAN_SESION_SIEMPRE = ["no_autorizado", "acl_no_disponible"];
-const SEG_NIEGAN_SESION_ENFORCE = ["usuario_suspendido", "canal_no_autorizado", "canal_no_verificado", "web_android_no_permitido", "dispositivo_bloqueado"];
+// usuario_pendiente SÍ recibe token: así la app muestra "pendiente" con su código y Reintentar.
+const SEG_NIEGAN_SESION_SIEMPRE = ["no_autorizado", "acl_no_disponible", "usuario_suspendido"];
+const SEG_NIEGAN_SESION_ENFORCE = ["canal_no_autorizado", "canal_no_verificado", "web_android_no_permitido", "dispositivo_bloqueado"];
 
 function iniciarSesion_(params) {
   const v = verificarIdToken_(params.id_token);

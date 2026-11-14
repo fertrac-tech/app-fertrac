@@ -10,6 +10,7 @@ export const ACCESS_CODES = [
   'token_invalido',
   'token_requerido',
   'no_autorizado',
+  'usuario_pendiente',
   'usuario_suspendido',
   'canal_no_autorizado',
   'canal_no_verificado',
@@ -46,6 +47,7 @@ const LAYER_BY_CODE: Record<Exclude<AccessCode, 'ok'>, SecurityLayer> = {
   token_invalido: 'google',
   token_requerido: 'google',
   no_autorizado: 'whitelist',
+  usuario_pendiente: 'whitelist',
   usuario_suspendido: 'whitelist',
   canal_no_autorizado: 'device',
   canal_no_verificado: 'device',
@@ -58,6 +60,7 @@ const LAYER_BY_CODE: Record<Exclude<AccessCode, 'ok'>, SecurityLayer> = {
 };
 
 const RETRYABLE: ReadonlySet<AccessCode> = new Set([
+  'usuario_pendiente',
   'dispositivo_pendiente',
   'dispositivo_limite',
   'dispositivo_requerido',
@@ -67,6 +70,7 @@ const RETRYABLE: ReadonlySet<AccessCode> = new Set([
 
 const WIPES_LOCAL_DATA: ReadonlySet<AccessCode> = new Set([
   'no_autorizado',
+  'usuario_pendiente',
   'usuario_suspendido',
   'canal_no_autorizado',
   'canal_no_verificado',
@@ -114,6 +118,10 @@ const MESSAGES: Record<Exclude<AccessCode, 'ok'>, AccessMessage> = {
   token_invalido: { title: 'Tu sesión expiró', body: 'Vuelve a iniciar sesión con Google para continuar.' },
   token_requerido: { title: 'Inicia sesión', body: 'El acceso requiere iniciar sesión con Google.' },
   no_autorizado: { title: 'Cuenta sin acceso', body: 'Tu cuenta no está en la lista de usuarios autorizados. Escala con el área encargada.' },
+  usuario_pendiente: {
+    title: 'Solicitud de acceso enviada',
+    body: 'Tu cuenta y este dispositivo quedaron pendientes de aprobación. Se avisó al área encargada; si te lo piden, dicta este código y pulsa "Reintentar" cuando te confirmen.',
+  },
   usuario_suspendido: { title: 'Acceso suspendido', body: 'Tu usuario fue suspendido. Contacta a tu administrador.' },
   canal_no_autorizado: { title: 'Canal no autorizado', body: 'Tu usuario no está habilitado para ingresar desde este canal (app o web).' },
   canal_no_verificado: { title: 'Canal no verificado', body: 'No se pudo verificar el canal de acceso. Reintenta o reinstala la aplicación.' },

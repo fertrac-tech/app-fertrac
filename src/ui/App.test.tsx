@@ -31,6 +31,15 @@ describe('Acceso (pantallas 01 y 02)', () => {
     expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
   });
 
+  it('cuenta nueva: "Solicitud de acceso enviada" con código y Reintentar; al aprobar las dos capas entra', async () => {
+    renderApp({ access: ['usuario_pendiente', 'ok'] });
+    expect(await screen.findByRole('heading', { name: 'Solicitud de acceso enviada' })).toBeInTheDocument();
+    expect(screen.getByText('A3F9K2')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Productos' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
+  });
+
   it('dispositivo bloqueado y usuario fuera de lista blanca no ven el catálogo', async () => {
     const blocked = renderApp({ access: ['dispositivo_bloqueado'] });
     expect(await screen.findByRole('heading', { name: 'Dispositivo bloqueado' })).toBeInTheDocument();
