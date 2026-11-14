@@ -151,9 +151,9 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
                 <ConditionPill condition={product.condition} promoColor={product.promoColor} large />
                 <StockPill stock={product.stock} long large />
               </div>
-              <h2 className="detail__name">{alias || product.name}</h2>
+              <h2 className="detail__name">{product.ref}</h2>
               <p className="detail__sub">
-                {[product.ref, alias ? product.name : null, product.brand, product.line && `Línea ${product.line}`]
+                {[alias || product.name, product.brand, product.line && `Línea ${product.line}`]
                   .filter(Boolean)
                   .join(' · ')}
               </p>

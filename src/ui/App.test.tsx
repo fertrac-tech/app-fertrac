@@ -123,7 +123,7 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
   it('muestra precios y mantiene el logo en la barra y junto a "Precios"', async () => {
     renderApp({ route: '/?ref=AMK-2210' });
     const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
-    expect(await within(detail).findByRole('heading', { name: 'AMORTIGUADOR CABINA T800' })).toBeInTheDocument();
+    expect(await within(detail).findByRole('heading', { name: 'AMK-2210' })).toBeInTheDocument();
     expect(within(detail).getByText('$ 412.000')).toBeInTheDocument();
     expect(within(detail).getByText('$ 391.400')).toBeInTheDocument();
     expect(within(detail).getByText('18 und disponibles')).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
   it('la foto se amplía en un diálogo centrado y se cierra', async () => {
     const { container } = renderApp({ route: '/?ref=AMK-2210' });
     const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
-    await within(detail).findByRole('heading', { name: 'AMORTIGUADOR CABINA T800' });
+    await within(detail).findByRole('heading', { name: 'AMK-2210' });
     expect((await container.catalog.get('AMK-2210'))?.photoUrl).toContain('sz=w200');
     await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
     const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
@@ -197,10 +197,10 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
 
   it('al cambiar de tamaño se conserva página, búsqueda y producto abierto (viven en la URL)', async () => {
     const first = renderApp({ viewport: 'compact', route: '/?q=filtro&p=1&ref=FAP-3321' });
-    expect(await screen.findByRole('heading', { name: 'FILTRO DE AIRE PRIMARIO' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'FAP-3321' })).toBeInTheDocument();
     first.unmount();
     renderApp({ viewport: 'medium', route: window.location.pathname + window.location.search });
-    expect(await screen.findByRole('heading', { name: 'FILTRO DE AIRE PRIMARIO' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'FAP-3321' })).toBeInTheDocument();
     expect(screen.getByRole('searchbox', { name: 'Buscar en el catálogo' })).toHaveValue('filtro');
   });
 });
