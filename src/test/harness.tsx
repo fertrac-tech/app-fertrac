@@ -10,14 +10,29 @@ import type { AuthProvider, CatalogSnapshot, Session, UserProfile } from '@/port
 import { App } from '@/ui/App';
 import { ContainerProvider } from '@/ui/context';
 
-export type Viewport = 'compact' | 'medium' | 'expanded';
+export type Viewport = 'compact' | 'medium' | 'expanded' | 'landscape';
 
-/** Simula el ancho de pantalla respondiendo a las media queries de los breakpoints. */
+const SIZES: Record<Viewport, [number, number]> = {
+  compact: [360, 780],
+  medium: [690, 900],
+  expanded: [1440, 900],
+  landscape: [932, 430], // teléfono en horizontal
+};
+
+/** Simula el tamaño de pantalla evaluando min/max-width y min/max-height de las media queries. */
 export function setViewport(viewport: Viewport, dark = false): void {
-  const width = { compact: 360, medium: 690, expanded: 1440 }[viewport];
+  const [width, height] = SIZES[viewport];
   window.matchMedia = ((query: string) => {
-    const min = /min-width:\s*(\d+)px/.exec(query);
-    const matches = min ? width >= Number(min[1]) : /prefers-color-scheme: dark/.test(query) ? dark : false;
+    const checks: Array<[RegExp, (v: number) => boolean]> = [
+      [/min-width:\s*([\d.]+)px/, (v) => width >= v],
+      [/max-width:\s*([\d.]+)px/, (v) => width <= v],
+      [/min-height:\s*([\d.]+)px/, (v) => height >= v],
+      [/max-height:\s*([\d.]+)px/, (v) => height <= v],
+    ];
+    const sized = checks.filter(([re]) => re.test(query));
+    const matches = sized.length
+      ? sized.every(([re, ok]) => ok(Number(re.exec(query)?.[1])))
+      : /prefers-color-scheme: dark/.test(query) ? dark : false;
     return { matches, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false };
   }) as typeof window.matchMedia;
 }

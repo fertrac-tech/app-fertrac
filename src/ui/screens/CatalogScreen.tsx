@@ -8,7 +8,7 @@ import { EditFavoriteSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
 import { EmptyState, ListSkeleton, PaginationBar, ProductCards, ProductTable } from '../components/ProductViews';
 import { Icon } from '../components/primitives';
-import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
+import { useBreakpoint, useContainer, useShortLandscape, useFavoritesState, useQuery, useReady } from '../context';
 import { SyncButton, SyncStamp } from '../layout/Shell';
 
 /** Nombre de cada filtro en la URL y en pantalla. */
@@ -66,6 +66,7 @@ export function CatalogScreen() {
   const { catalogVersion } = useReady();
   const favoritesState = useFavoritesState();
   const breakpoint = useBreakpoint();
+  const shortLandscape = useShortLandscape();
   const [params, setParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -129,7 +130,7 @@ export function CatalogScreen() {
   const expanded = breakpoint === 'expanded';
   const items = (page?.items ?? []).map((product) => ({ product }));
   const listProps = { items, selectedRef, isFavorite: fav, onOpen: (ref: string) => update({ ref }), onFavorite };
-  const showDetail = Boolean(selectedRef) || breakpoint === 'medium';
+  const showDetail = Boolean(selectedRef) || (breakpoint === 'medium' && !shortLandscape);
   const total = page ? formatCount(page.total) : '…';
 
   const search = (

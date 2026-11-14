@@ -7,7 +7,7 @@ import { DeleteListSheet, EditFavoriteSheet, ListNameSheet } from '../components
 import { ProductDetail } from '../components/ProductDetail';
 import { EmptyState, ListSkeleton, ProductCards, ProductTable, type ProductItem } from '../components/ProductViews';
 import { Icon } from '../components/primitives';
-import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
+import { useBreakpoint, useContainer, useShortLandscape, useFavoritesState, useQuery, useReady } from '../context';
 
 type Dialog = { kind: 'new' } | { kind: 'rename'; id: string } | { kind: 'delete'; id: string } | { kind: 'edit'; ref: string } | null;
 
@@ -63,6 +63,7 @@ export function FavoritesScreen() {
   const { catalogVersion } = useReady();
   const state = useFavoritesState();
   const breakpoint = useBreakpoint();
+  const shortLandscape = useShortLandscape();
   const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [search, setSearch] = useState('');
@@ -180,7 +181,7 @@ export function FavoritesScreen() {
         </div>
       </section>
 
-      {(selectedRef || breakpoint === 'medium') &&
+      {(selectedRef || (breakpoint === 'medium' && !shortLandscape)) &&
         (selectedRef ? (
           <ProductDetail
             product={selected}

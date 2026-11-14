@@ -54,6 +54,21 @@ export function useBreakpoint(): Breakpoint {
   return useSyncExternalStore(subscribe, currentBreakpoint);
 }
 
+/**
+ * Teléfono en horizontal (p. ej. 932×430): ancho de tableta pero poca altura. Ahí el panel de
+ * detalle vacío desperdicia media pantalla, así que la lista ocupa todo el ancho hasta elegir un producto.
+ */
+const SHORT_LANDSCAPE = '(min-width: 600px) and (max-width: 1023.98px) and (max-height: 599.98px)';
+
+export function useShortLandscape(): boolean {
+  const subscribe = useCallback((onChange: () => void) => {
+    const query = window.matchMedia(SHORT_LANDSCAPE);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return useSyncExternalStore(subscribe, () => window.matchMedia(SHORT_LANDSCAPE).matches);
+}
+
 // ── Tema: claro por defecto; el usuario lo cambia a voluntad con un botón ──
 
 export type Theme = 'light' | 'dark';

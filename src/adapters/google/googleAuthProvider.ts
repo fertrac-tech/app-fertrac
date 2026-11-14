@@ -147,18 +147,38 @@ export class GoogleAuthProvider implements AuthProvider {
     }
   }
 
-  /** Web: botón oficial de Google. Devuelve false en la APK (usa el botón propio + plugin nativo). */
+  /**
+   * Web: botón oficial de Google. Devuelve false en la APK (usa el botón propio + plugin nativo).
+   * Google dibuja el botón en un iframe de ancho FIJO: se mide el espacio real y se vuelve a dibujar
+   * cuando cambia (rotación, ventana redimensionada, modo responsive), para que nunca desborde.
+   */
   mountButton(container: HTMLElement, onResult: (session: Promise<Session>) => void): boolean {
     if (this.native()) return false;
     void this.loadGis()
       .then((gis) => {
         this.initialize(gis, {});
         this.onCredential = (response) => onResult(this.completeWeb(response.credential));
-        gis.renderButton(container, {
-          type: 'standard', theme: 'outline', size: 'large', text: 'signin_with',
-          shape: 'pill', logo_alignment: 'left', locale: 'es',
-          width: Math.min(400, Math.max(200, Math.round(container.clientWidth || 320))),
-        });
+        let drawnWidth = 0;
+        const draw = () => {
+          const available = Math.floor(container.getBoundingClientRect().width || container.clientWidth || 0);
+          const width = Math.min(400, Math.max(200, available || 320));
+          if (Math.abs(width - drawnWidth) < 8) return;
+          drawnWidth = width;
+          container.replaceChildren();
+          gis.renderButton(container, {
+            type: 'standard', theme: 'outline', size: 'large', text: 'signin_with',
+            shape: 'pill', logo_alignment: 'left', locale: 'es', width,
+          });
+        };
+        draw();
+        if (typeof ResizeObserver !== 'undefined') {
+          let pending: ReturnType<typeof setTimeout> | undefined;
+          const observer = new ResizeObserver(() => {
+            clearTimeout(pending);
+            pending = setTimeout(() => (container.isConnected ? draw() : observer.disconnect()), 150);
+          });
+          observer.observe(container);
+        }
       })
       .catch((error: unknown) => onResult(Promise.reject(error)));
     return true;

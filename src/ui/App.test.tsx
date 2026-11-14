@@ -174,6 +174,16 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
     expect(screen.getByRole('list', { name: 'Productos' })).toBeInTheDocument();
   });
 
+  it('teléfono en horizontal (932×430): sin panel de detalle vacío; al elegir un producto se abre a un lado', async () => {
+    renderApp({ viewport: 'landscape' });
+    await screen.findByRole('list', { name: 'Productos' });
+    expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toHaveClass('rail');
+    expect(screen.queryByRole('complementary', { name: 'Detalle de producto' })).not.toBeInTheDocument();
+    await userEvent.click(within(cards()[0] as HTMLElement).getAllByRole('button')[0] as HTMLElement);
+    expect(await screen.findByRole('button', { name: 'Cerrar detalle' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Productos' })).toBeInTheDocument();
+  });
+
   it('escritorio: riel y tabla con el logo en el encabezado después de "Producto"', async () => {
     renderApp({ viewport: 'expanded' });
     const table = await screen.findByRole('table', { name: 'Productos' });
