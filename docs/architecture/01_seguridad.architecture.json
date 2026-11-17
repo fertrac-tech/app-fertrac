@@ -1,0 +1,515 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Lista de Precios v2 · Modelo de seguridad",
+    "output": "docs/architecture/01_seguridad.architecture.html",
+    "locale": "es",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/fertrac-tech/app-fertrac.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "bc5b27bc0def5499aa918bf1213c4b9d8afbd802"
+    }
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "Usuario @fertrac.com",
+      "sublabel": "web o Android",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "GoogleAuthProvider",
+      "sublabel": "GIS web · plugin nativo",
+      "pos": [
+        340,
+        40
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "ID token",
+      "sources": [
+        {
+          "path": "src/adapters/google/googleAuthProvider.ts",
+          "line": 126,
+          "label": "proveedor de login",
+          "end_line": 136
+        },
+        {
+          "path": "src/adapters/google/googleAuthProvider.ts",
+          "line": 310,
+          "label": "canje con backend",
+          "end_line": 312
+        }
+      ]
+    },
+    {
+      "id": "app",
+      "type": "frontend",
+      "label": "App v2 · SessionController",
+      "sublabel": "React PWA / APK Capacitor",
+      "pos": [
+        340,
+        180
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "CSP SEC-04",
+      "sources": [
+        {
+          "path": "src/app/sessionController.ts",
+          "line": 44,
+          "label": "controlador de sesión",
+          "end_line": 54
+        },
+        {
+          "path": "src/domain/access.ts",
+          "line": 81,
+          "label": "veredicto de acceso",
+          "end_line": 95
+        },
+        {
+          "path": "vite.config.ts",
+          "line": 12,
+          "label": "CSP en meta",
+          "end_line": 20
+        }
+      ]
+    },
+    {
+      "id": "idb",
+      "type": "database",
+      "label": "Almacenamiento local",
+      "sublabel": "IndexedDB + localStorage",
+      "pos": [
+        340,
+        320
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "vence 24 h",
+      "sources": [
+        {
+          "path": "src/app/container.ts",
+          "line": 58,
+          "label": "SEC-05 24 h",
+          "end_line": 60
+        },
+        {
+          "path": "src/adapters/catalog/snapshotCatalogRepository.ts",
+          "line": 30,
+          "label": "borra copia vencida",
+          "end_line": 33
+        }
+      ]
+    },
+    {
+      "id": "devid",
+      "type": "security",
+      "label": "BrowserDeviceIdentity",
+      "sublabel": "and-ANDROID_ID / web-UUID",
+      "pos": [
+        540,
+        320
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/adapters/device/browserDeviceIdentity.ts",
+          "line": 58,
+          "label": "identidad del equipo",
+          "end_line": 68
+        },
+        {
+          "path": "src/adapters/device/browserDeviceIdentity.ts",
+          "line": 81,
+          "label": "prefijo and-/web-",
+          "end_line": 97
+        }
+      ]
+    },
+    {
+      "id": "google",
+      "type": "cloud",
+      "label": "Google Identity",
+      "sublabel": "OAuth · JWKS públicas",
+      "pos": [
+        800,
+        40
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API.gs",
+      "sublabel": "doPost · Web App",
+      "pos": [
+        800,
+        180
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "solo POST",
+      "sources": [
+        {
+          "path": "gs/API.gs",
+          "line": 44,
+          "label": "enrutamiento + autorización",
+          "end_line": 74
+        },
+        {
+          "path": "src/adapters/appsScript/client.ts",
+          "line": 92,
+          "label": "cliente POST text/plain"
+        }
+      ]
+    },
+    {
+      "id": "seg",
+      "type": "security",
+      "label": "Seguridad.gs",
+      "sublabel": "verifica ID token · firma st1",
+      "pos": [
+        1060,
+        180
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "HMAC ST_SECRET",
+      "sources": [
+        {
+          "path": "gs/Seguridad.gs",
+          "line": 127,
+          "label": "RS256 iss aud exp hd",
+          "end_line": 177
+        },
+        {
+          "path": "gs/Seguridad.gs",
+          "line": 210,
+          "label": "token st1",
+          "end_line": 223
+        },
+        {
+          "path": "gs/Seguridad.gs",
+          "line": 285,
+          "label": "canje de sesión",
+          "end_line": 315
+        }
+      ]
+    },
+    {
+      "id": "acl",
+      "type": "security",
+      "label": "Autorizacion.gs",
+      "sublabel": "ACL en 2 capas",
+      "pos": [
+        1060,
+        320
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "caché 5 min",
+      "sources": [
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 191,
+          "label": "evalúa usuario + equipo",
+          "end_line": 266
+        },
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 267,
+          "label": "bloqueo vs observación",
+          "end_line": 283
+        },
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 292,
+          "label": "alta PENDIENTE",
+          "end_line": 322
+        }
+      ]
+    },
+    {
+      "id": "users",
+      "type": "database",
+      "label": "USUARIOS AUTORIZADOS",
+      "sublabel": "ACTIVO/PENDIENTE/SUSPENDIDO",
+      "pos": [
+        800,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "APP/WEB/AMBOS",
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 18,
+          "label": "hoja de usuarios"
+        },
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 47,
+          "label": "estados y canales",
+          "end_line": 49
+        }
+      ]
+    },
+    {
+      "id": "disp",
+      "type": "database",
+      "label": "DISPOSITIVOS",
+      "sublabel": "PENDIENTE/APROBADO/BLOQUEADO",
+      "pos": [
+        1060,
+        470
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "HUELLA",
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 24,
+          "label": "hoja de equipos"
+        },
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 347,
+          "label": "registra equipo",
+          "end_line": 367
+        }
+      ]
+    },
+    {
+      "id": "approver",
+      "type": "external",
+      "label": "Aprobador",
+      "sublabel": "Gmail · edita hojas",
+      "pos": [
+        800,
+        610
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 114,
+          "label": "correo aprobador"
+        },
+        {
+          "path": "gs/Autorizacion.gs",
+          "line": 503,
+          "label": "invalida caché al editar",
+          "end_line": 513
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Dispositivo · app.fertrac.com (GitHub Pages) / APK",
+      "wraps": [
+        "auth",
+        "app",
+        "idb",
+        "devid"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "Google Apps Script · backend",
+      "wraps": [
+        "api",
+        "seg",
+        "acl"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "Google Sheets · BASE MOTOR",
+      "wraps": [
+        "users",
+        "disp"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "login",
+      "from": "user",
+      "to": "auth",
+      "label": "Sign in with Google",
+      "variant": "emphasis"
+    },
+    {
+      "id": "idtoken",
+      "from": "auth",
+      "to": "google",
+      "label": "ID token (JWT)",
+      "variant": "security"
+    },
+    {
+      "id": "auth-app",
+      "from": "auth",
+      "to": "app",
+      "label": "id_token"
+    },
+    {
+      "id": "app-api",
+      "from": "app",
+      "to": "api",
+      "label": "POST id_token / st1",
+      "variant": "emphasis"
+    },
+    {
+      "id": "api-app",
+      "from": "api",
+      "to": "app",
+      "label": "st1 o código ACL"
+    },
+    {
+      "id": "api-seg",
+      "from": "api",
+      "to": "seg",
+      "label": "verifica token",
+      "variant": "security"
+    },
+    {
+      "id": "jwks",
+      "from": "google",
+      "to": "seg",
+      "label": "JWKS RS256",
+      "variant": "security"
+    },
+    {
+      "id": "seg-acl",
+      "from": "seg",
+      "to": "acl",
+      "label": "evalúa acceso",
+      "variant": "security"
+    },
+    {
+      "id": "acl-users",
+      "from": "acl",
+      "to": "users",
+      "label": "ESTADO · CANAL"
+    },
+    {
+      "id": "acl-disp",
+      "from": "acl",
+      "to": "disp",
+      "label": "ESTADO equipo"
+    },
+    {
+      "id": "acl-mail",
+      "from": "acl",
+      "to": "approver",
+      "label": "correo solicitud",
+      "variant": "dashed"
+    },
+    {
+      "id": "approve",
+      "from": "approver",
+      "to": "users",
+      "label": "aprueba"
+    },
+    {
+      "id": "app-idb",
+      "from": "app",
+      "to": "idb",
+      "label": "copia ≤24 h"
+    },
+    {
+      "id": "app-devid",
+      "from": "devid",
+      "to": "app",
+      "label": "device_id"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Capa 1 · Google (SEC-01)",
+      "items": [
+        "Login con Google Identity Services (web) o plugin nativo (APK). El ID token nunca se usa para pedir datos.",
+        "Seguridad.gs verifica firma RS256 con las JWKS de Google e iss, aud, exp, iat, email_verified y hd = fertrac.com."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Capa 2 · Lista blanca (usuario)",
+      "items": [
+        "USUARIOS AUTORIZADOS: ESTADO ACTIVO / PENDIENTE / SUSPENDIDO y CANAL APP / WEB / AMBOS.",
+        "Una cuenta @fertrac.com nueva entra como PENDIENTE y dispara un solo correo al aprobador; PENDIENTE y SUSPENDIDO bloquean siempre."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Capa 3 · Dispositivo",
+      "items": [
+        "device_id and-/web- con HUELLA en DISPOSITIVOS (PENDIENTE / APROBADO / BLOQUEADO), máx. 1 APP y 2 WEB por usuario.",
+        "ENFORCE_DISPOSITIVOS = false: la capa de equipo está en observación (registra, aún no bloquea).",
+        "Uso compartido (varios correos o huellas por equipo) genera alerta en ALERTAS_DISPOSITIVOS + correo."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Sesión y cliente (SEC-02 a SEC-05)",
+      "items": [
+        "Token st1 firmado con HMAC (ST_SECRET en PropertiesService, rotación semanal), ligado a correo + device; TTL 12 h, rotación 6 h, máx. 7 días.",
+        "Todo por POST text/plain, sin credenciales en la URL; CSP en meta del build.",
+        "Copia local vence a las 24 h y se borra si el acceso es revocado."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Pendientes abiertos",
+      "items": [
+        "ACEPTAR_ACCESS_TOKEN_LEGADO aún en true (apagar ~20-nov-2026).",
+        "Play Integrity preparado pero apagado (APK de instalación manual).",
+        "SEC-07 clickjacking y restringir ?report=inactivos."
+      ]
+    }
+  ]
+}

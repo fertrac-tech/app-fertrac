@@ -1,0 +1,492 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Lista de Precios v2 · Flujo de datos Drive → App",
+    "output": "docs/architecture/02_datos.dataflow.html",
+    "locale": "es",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/fertrac-tech/app-fertrac.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "bc5b27bc0def5499aa918bf1213c4b9d8afbd802"
+    }
+  },
+  "stages": [
+    {
+      "label": "Origen · Google Drive"
+    },
+    {
+      "label": "Sincronización · Apps Script"
+    },
+    {
+      "label": "Base · BASE MOTOR"
+    },
+    {
+      "label": "API · Web App"
+    },
+    {
+      "label": "App v2 · dispositivo"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "lista",
+      "type": "database",
+      "label": "LISTA DE PRECIOS",
+      "sublabel": "Google Sheets (fuente)",
+      "stage": 0,
+      "row": 1,
+      "tag": "comercial edita",
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 11,
+          "label": "ID hoja fuente"
+        },
+        {
+          "path": "gs/Config.gs",
+          "line": 15,
+          "label": "pestaña LISTA DE PRECIOS"
+        }
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "Sync.gs",
+      "sublabel": "cada 5 min + onEdit",
+      "stage": 1,
+      "row": 1,
+      "tag": "LockService",
+      "sources": [
+        {
+          "path": "gs/Triggers.gs",
+          "line": 22,
+          "label": "trigger 5 min",
+          "end_line": 23
+        },
+        {
+          "path": "gs/Triggers.gs",
+          "line": 31,
+          "label": "trigger onEdit",
+          "end_line": 34
+        },
+        {
+          "path": "gs/Sync.gs",
+          "line": 120,
+          "label": "lee LISTA, escribe Hoja2",
+          "end_line": 132
+        }
+      ]
+    },
+    {
+      "id": "photos",
+      "type": "backend",
+      "label": "Photos.gs",
+      "sublabel": "cada 10 min, lotes",
+      "stage": 1,
+      "row": 3,
+      "tag": "webp",
+      "sources": [
+        {
+          "path": "gs/Triggers.gs",
+          "line": 27,
+          "label": "trigger 10 min",
+          "end_line": 28
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 1005,
+          "label": "reintentos + nuevas refs",
+          "end_line": 1013
+        }
+      ]
+    },
+    {
+      "id": "wsrv",
+      "type": "external",
+      "label": "wsrv.nl",
+      "sublabel": "convierte a WebP q80",
+      "stage": 2,
+      "row": 4,
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 56,
+          "label": "URL conversor"
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 929,
+          "label": "descarga WebP",
+          "end_line": 959
+        }
+      ]
+    },
+    {
+      "id": "hoja2",
+      "type": "database",
+      "label": "Hoja2",
+      "sublabel": "BASE MOTOR · catálogo",
+      "stage": 2,
+      "row": 1,
+      "tag": "+ INACTIVAS",
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 10,
+          "label": "ID BASE MOTOR"
+        },
+        {
+          "path": "gs/Config.gs",
+          "line": 14,
+          "label": "pestaña Hoja2"
+        }
+      ]
+    },
+    {
+      "id": "cachesh",
+      "type": "database",
+      "label": "CACHE_",
+      "sublabel": "ref → URL foto Drive",
+      "stage": 2,
+      "row": 2,
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 17,
+          "label": "pestaña CACHE_"
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 832,
+          "label": "crea/abre CACHE_",
+          "end_line": 844
+        }
+      ]
+    },
+    {
+      "id": "folder",
+      "type": "database",
+      "label": "Carpeta Fotos",
+      "sublabel": "Drive · .webp público",
+      "stage": 2,
+      "row": 3,
+      "tag": "ANYONE_WITH_LINK",
+      "sources": [
+        {
+          "path": "gs/Config.gs",
+          "line": 54,
+          "label": "carpeta de fotos"
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 853,
+          "label": "guarda archivo",
+          "end_line": 863
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 870,
+          "label": "lectura pública",
+          "end_line": 876
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API.gs",
+      "sublabel": "doPost · Web App",
+      "stage": 3,
+      "row": 1,
+      "tag": "token st1",
+      "sources": [
+        {
+          "path": "gs/API.gs",
+          "line": 24,
+          "label": "entrada POST",
+          "end_line": 39
+        },
+        {
+          "path": "gs/API.gs",
+          "line": 181,
+          "label": "lee Hoja2 con lock",
+          "end_line": 214
+        },
+        {
+          "path": "gs/API.gs",
+          "line": 131,
+          "label": "mapa de fotos"
+        }
+      ]
+    },
+    {
+      "id": "cachesvc",
+      "type": "database",
+      "label": "CacheService",
+      "sublabel": "catálogo 90 s · fotos 1 h",
+      "stage": 3,
+      "row": 2,
+      "sources": [
+        {
+          "path": "gs/API.gs",
+          "line": 14,
+          "label": "TTL catálogo"
+        },
+        {
+          "path": "gs/Photos.gs",
+          "line": 612,
+          "label": "TTL fotos"
+        },
+        {
+          "path": "gs/API.gs",
+          "line": 358,
+          "label": "caché en trozos",
+          "end_line": 377
+        }
+      ]
+    },
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "AppsScriptClient",
+      "sublabel": "POST + mapper",
+      "stage": 4,
+      "row": 1,
+      "tag": "reintentos",
+      "sources": [
+        {
+          "path": "src/adapters/appsScript/client.ts",
+          "line": 77,
+          "label": "POST con device",
+          "end_line": 97
+        },
+        {
+          "path": "src/adapters/appsScript/catalogSource.ts",
+          "line": 18,
+          "label": "catálogo + fotos",
+          "end_line": 26
+        },
+        {
+          "path": "src/adapters/appsScript/mapper.ts",
+          "line": 76,
+          "label": "fila → Product",
+          "end_line": 105
+        }
+      ]
+    },
+    {
+      "id": "repo",
+      "type": "backend",
+      "label": "CatalogIndex",
+      "sublabel": "SnapshotRepository",
+      "stage": 4,
+      "row": 2,
+      "tag": "orden 1 vez",
+      "sources": [
+        {
+          "path": "src/adapters/catalog/snapshotCatalogRepository.ts",
+          "line": 34,
+          "label": "sync → índice",
+          "end_line": 42
+        },
+        {
+          "path": "src/domain/catalogQuery.ts",
+          "line": 53,
+          "label": "índice ordenado",
+          "end_line": 83
+        }
+      ]
+    },
+    {
+      "id": "idb",
+      "type": "database",
+      "label": "IndexedDB",
+      "sublabel": "snapshot + favoritos",
+      "stage": 4,
+      "row": 3,
+      "tag": "vence 24 h",
+      "sources": [
+        {
+          "path": "src/adapters/storage/idbStores.ts",
+          "line": 8,
+          "label": "snapshot catálogo",
+          "end_line": 28
+        },
+        {
+          "path": "src/adapters/storage/idbStores.ts",
+          "line": 33,
+          "label": "favoritos locales",
+          "end_line": 48
+        },
+        {
+          "path": "src/app/container.ts",
+          "line": 58,
+          "label": "SEC-05 24 h",
+          "end_line": 60
+        }
+      ]
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "UI React",
+      "sublabel": "catálogo 100/pág · detalle",
+      "stage": 4,
+      "row": 0,
+      "sources": [
+        {
+          "path": "src/ui/screens/CatalogScreen.tsx",
+          "line": 65,
+          "label": "consume repositorio"
+        },
+        {
+          "path": "src/domain/catalogQuery.ts",
+          "line": 81,
+          "label": "query paginada",
+          "end_line": 101
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "lista-sync",
+      "from": "lista",
+      "to": "sync",
+      "label": "precios, inventario",
+      "classification": "comercial",
+      "variant": "emphasis"
+    },
+    {
+      "id": "lista-photos",
+      "from": "lista",
+      "to": "photos",
+      "label": "URL imagen col C",
+      "classification": "referencias"
+    },
+    {
+      "id": "sync-hoja2",
+      "from": "sync",
+      "to": "hoja2",
+      "label": "upsert filas",
+      "classification": "catálogo",
+      "variant": "emphasis"
+    },
+    {
+      "id": "photos-wsrv",
+      "from": "photos",
+      "to": "wsrv",
+      "label": "imagen → WebP",
+      "classification": "pública"
+    },
+    {
+      "id": "photos-folder",
+      "from": "photos",
+      "to": "folder",
+      "label": "guarda .webp"
+    },
+    {
+      "id": "photos-cache",
+      "from": "photos",
+      "to": "cachesh",
+      "label": "ref → URL Drive"
+    },
+    {
+      "id": "hoja2-api",
+      "from": "hoja2",
+      "to": "api",
+      "label": "getValues (lock)",
+      "classification": "catálogo",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cache-api",
+      "from": "cachesh",
+      "to": "api",
+      "label": "mapa de fotos"
+    },
+    {
+      "id": "api-cachesvc",
+      "from": "api",
+      "to": "cachesvc",
+      "label": "cachea JSON",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-client",
+      "from": "api",
+      "to": "client",
+      "label": "JSON filas + fotos",
+      "classification": "requiere st1",
+      "variant": "security"
+    },
+    {
+      "id": "client-repo",
+      "from": "client",
+      "to": "repo",
+      "label": "Product[]",
+      "variant": "emphasis"
+    },
+    {
+      "id": "repo-idb",
+      "from": "repo",
+      "to": "idb",
+      "label": "copia local",
+      "classification": "SEC-05",
+      "variant": "security"
+    },
+    {
+      "id": "repo-ui",
+      "from": "repo",
+      "to": "ui",
+      "label": "página ordenada",
+      "variant": "emphasis"
+    },
+    {
+      "id": "folder-ui",
+      "from": "folder",
+      "to": "ui",
+      "label": "miniaturas https"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Ruta principal del catálogo",
+      "items": [
+        "Comercial edita LISTA DE PRECIOS; Sync.gs la copia a BASE MOTOR/Hoja2 cada 5 min y en cada edición (gs/Triggers.gs).",
+        "API.gs lee Hoja2 con LockService y la cachea 90 s en CacheService; si una sync tiene el lock responde temporalmente_ocupado y la app reintenta.",
+        "La app recibe la hoja completa, la mapea a Product[] y la ordena una sola vez en CatalogIndex; buscar, filtrar y paginar (100/pág) es local."
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Ruta de fotos",
+      "items": [
+        "Photos.gs toma la URL de imagen de LISTA DE PRECIOS, la convierte a WebP con wsrv.nl y la guarda en la carpeta de Drive con lectura pública por enlace.",
+        "CACHE_ guarda ref → URL de Drive; la API sirve ese mapa con caché de 1 h.",
+        "La UI carga las miniaturas directo desde Drive (no pasan por la API)."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Controles sobre los datos",
+      "items": [
+        "Toda llamada de datos exige token de dispositivo st1 (ver 01_seguridad).",
+        "La copia local en IndexedDB vence a las 24 h sin sincronizar y se borra si el acceso es revocado (SEC-05).",
+        "Favoritos viven solo en el dispositivo (IndexedDB), sin sincronización entre equipos en esta fase."
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Migración a la nube",
+      "items": [
+        "Reemplazar AppsScriptClient + SnapshotCatalogRepository por un CloudCatalogRepository registrado en src/app/container.ts; dominio y UI no cambian."
+      ]
+    }
+  ]
+}

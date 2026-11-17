@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lista de Precios v2 · Arquitectura</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f4f5f7; --card:#fff; --text:#1d2330; --muted:#5b6475; --line:#e2e5ea; --accent:#0f9d74; --sec:#e0245e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12151b; --card:#1b2029; --text:#e8ebf0; --muted:#9aa3b2; --line:#2b3240; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  p.lead { color: var(--muted); margin: 0 0 32px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+  a.card { display:block; text-decoration:none; color:inherit; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:22px; transition: transform .15s, box-shadow .15s; border-top: 4px solid var(--c); }
+  a.card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+  .tag { font-size:12px; font-weight:600; color:var(--c); text-transform:uppercase; letter-spacing:.04em; }
+  h2 { font-size:19px; margin:8px 0 10px; }
+  ul { margin:0; padding-left:18px; color:var(--muted); font-size:14px; line-height:1.55; }
+  .go { margin-top:16px; font-weight:600; color:var(--c); font-size:14px; }
+  footer { margin-top:36px; color:var(--muted); font-size:12px; }
+  code { font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lista de Precios v2 · Arquitectura</h1>
+  <p class="lead">Vistas Archify del repositorio <code>fertrac-tech/app-fertrac</code> (commit <code>bc5b27b</code>).</p>
+
+  <div class="grid">
+    <a class="card" href="02_datos.dataflow.html" style="--c:var(--accent)">
+      <span class="tag">Flujo de datos</span>
+      <h2>Drive → App</h2>
+      <ul>
+        <li>LISTA DE PRECIOS → Sync.gs → BASE MOTOR / Hoja2</li>
+        <li>Fotos: Photos.gs → WebP → carpeta Drive + CACHE_</li>
+        <li>API.gs + CacheService → AppsScriptClient</li>
+        <li>CatalogIndex, IndexedDB (24 h) y UI React</li>
+      </ul>
+      <div class="go">Abrir diagrama →</div>
+    </a>
+
+    <a class="card" href="01_seguridad.architecture.html" style="--c:var(--sec)">
+      <span class="tag">Seguridad</span>
+      <h2>Modelo de seguridad</h2>
+      <ul>
+        <li>Capa 1: Google ID token (RS256, hd = fertrac.com)</li>
+        <li>Capa 2: USUARIOS AUTORIZADOS (estado y canal)</li>
+        <li>Capa 3: DISPOSITIVOS (device_id + huella)</li>
+        <li>Token st1 HMAC, solo POST, CSP, copia local 24 h</li>
+      </ul>
+      <div class="go">Abrir diagrama →</div>
+    </a>
+  </div>
+
+  <footer>Fuentes JSON: <code>01_seguridad.architecture.json</code> · <code>02_datos.dataflow.json</code> — regenerar con Archify <code>finalize</code> tras cambios de flujo.</footer>
+</main>
+</body>
+</html>
