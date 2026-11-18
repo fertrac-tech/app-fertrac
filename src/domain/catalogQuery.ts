@@ -4,7 +4,17 @@ import { compareText, normalize } from './text';
 
 export const FILTER_KEYS = ['line', 'brand', 'category', 'subcategory', 'type', 'condition'] as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
-export type CatalogFilters = Partial<Record<FilterKey, string>>;
+/**
+ * Cada filtro admite varios valores: un producto pasa si coincide con CUALQUIERA de los valores
+ * de un filtro (OR) y con TODOS los filtros activos (AND). Un string suelto equivale a `[valor]`.
+ */
+export type CatalogFilters = Partial<Record<FilterKey, string | readonly string[]>>;
+
+/** Valores seleccionados de un filtro, sin vacíos ni duplicados. */
+export function filterValues(value: string | readonly string[] | undefined): string[] {
+  const list = typeof value === 'string' ? [value] : (value ?? []);
+  return [...new Set(list.filter(Boolean))];
+}
 
 export interface CatalogQuery {
   text?: string;
@@ -80,12 +90,14 @@ export class CatalogIndex {
 
   query(query: CatalogQuery = {}): CatalogPage {
     const tokens = normalize(query.text ?? '').split(' ').filter(Boolean);
-    const filters = Object.entries(query.filters ?? {}).filter(([, v]) => Boolean(v)) as [FilterKey, string][];
+    const filters = (Object.entries(query.filters ?? {}) as [FilterKey, CatalogFilters[FilterKey]][])
+      .map(([key, value]) => [key, new Set(filterValues(value))] as const)
+      .filter(([, values]) => values.size > 0);
 
     const matches: Product[] = [];
     for (const { product, haystack } of this.entries) {
       if (!tokens.every((t) => haystack.includes(t))) continue;
-      if (!filters.every(([key, value]) => filterValue(product, key) === value)) continue;
+      if (!filters.every(([key, values]) => values.has(filterValue(product, key)))) continue;
       matches.push(product);
     }
 

@@ -69,6 +69,14 @@ describe('CatalogIndex.query', () => {
     expect(index.query({ filters: { brand: '' } }).total).toBe(catalog.length);
   });
 
+  it('selección múltiple: OR dentro de un mismo filtro y AND entre filtros', () => {
+    expect(refs(index.query({ filters: { brand: ['ORIGINAL', 'IMPORTADO'] } }).items)).toEqual([
+      'BAC-1450', 'CRC-1810', 'KEM-1550', 'RAF-0780',
+    ]);
+    expect(refs(index.query({ filters: { brand: ['ORIGINAL', 'IMPORTADO'], condition: ['PROMO'] } }).items)).toEqual(['CRC-1810']);
+    expect(index.query({ filters: { brand: [] } }).total).toBe(catalog.length);
+  });
+
   it('pagina el resultado filtrado de 100 en 100', () => {
     const many = Array.from({ length: 250 }, (_, i) =>
       makeProduct({ ref: `R-${String(i).padStart(4, '0')}`, name: `ITEM ${String(i).padStart(4, '0')}` }),

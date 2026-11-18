@@ -1,38 +1,41 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CONDITION_LABEL, FILTER_KEYS, type CatalogFilters, type Facets, type FilterKey } from '@/domain/catalogQuery';
+import { CONDITION_LABEL, FILTER_KEYS, filterValues, type Facets, type FilterKey } from '@/domain/catalogQuery';
 import { isFavorite } from '@/domain/favorites';
 import type { Condition } from '@/domain/product';
 import { formatCount } from '@/domain/text';
 import { EditFavoriteSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
 import { EmptyState, ListSkeleton, PaginationBar, ProductCards, ProductTable } from '../components/ProductViews';
+import { MultiSelectFilter } from '../components/MultiSelectFilter';
 import { Icon } from '../components/primitives';
-import { useBreakpoint, useContainer, useShortLandscape, useFavoritesState, useQuery, useReady } from '../context';
+import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { SyncButton, SyncStamp } from '../layout/Shell';
 
 /** Nombre de cada filtro en la URL y en pantalla. */
-const FILTERS: Record<FilterKey, { param: string; label: string; all: string }> = {
-  line: { param: 'linea', label: 'Línea', all: 'Todas' },
-  brand: { param: 'marca', label: 'Marca', all: 'Todas' },
-  category: { param: 'categoria', label: 'Categoría', all: 'Todas' },
-  subcategory: { param: 'subcategoria', label: 'Subcategoría', all: 'Todas' },
-  type: { param: 'tipo', label: 'Tipo', all: 'Todos' },
-  condition: { param: 'condicion', label: 'Condición', all: 'Todas' },
+const FILTERS: Record<FilterKey, { param: string; label: string; all: string; plural: string }> = {
+  line: { param: 'linea', label: 'Línea', all: 'Todas', plural: 'seleccionadas' },
+  brand: { param: 'marca', label: 'Marca', all: 'Todas', plural: 'seleccionadas' },
+  category: { param: 'categoria', label: 'Categoría', all: 'Todas', plural: 'seleccionadas' },
+  subcategory: { param: 'subcategoria', label: 'Subcategoría', all: 'Todas', plural: 'seleccionadas' },
+  type: { param: 'tipo', label: 'Tipo', all: 'Todos', plural: 'seleccionados' },
+  condition: { param: 'condicion', label: 'Condición', all: 'Todas', plural: 'seleccionadas' },
 };
 
-const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition] : value);
+const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition] ?? value : value);
+
+type SelectedFilters = Partial<Record<FilterKey, string[]>>;
 
 interface FilterChipsProps {
   facets: Facets | undefined;
-  filters: CatalogFilters;
-  onChange: (key: FilterKey, value: string) => void;
+  filters: SelectedFilters;
+  onChange: (key: FilterKey, values: string[]) => void;
   onClear: () => void;
 }
 
-/** Filtros siempre a la vista, con el botón "Limpiar filtros" al inicio de la fila. */
+/** Filtros siempre a la vista (selección múltiple con búsqueda), con "Limpiar filtros" al inicio de la fila. */
 function FilterChips({ facets, filters, onChange, onClear }: FilterChipsProps) {
-  const active = Object.keys(filters).length;
+  const active = Object.values(filters).reduce((n, values) => n + (values?.length ?? 0), 0);
   return (
     <div className="chips" role="group" aria-label="Filtros">
       <button type="button" className="chip chip--clear" disabled={active === 0} onClick={onClear}>
@@ -40,21 +43,18 @@ function FilterChips({ facets, filters, onChange, onClear }: FilterChipsProps) {
         Limpiar filtros{active > 0 ? ` · ${active}` : ''}
       </button>
       {FILTER_KEYS.map((key) => {
-        const value = filters[key] ?? '';
-        const { label, all } = FILTERS[key];
+        const { label, all, plural } = FILTERS[key];
         return (
-          <label key={key} className={`chip ${value ? 'chip--active' : ''}`}>
-            <span className="truncate" style={{ maxWidth: 160 }}>{value ? optionLabel(key, value) : label}</span>
-            <Icon name="down" size={14} />
-            <select aria-label={label} value={value} onChange={(e) => onChange(key, e.target.value)}>
-              <option value="">{all}</option>
-              {(facets?.[key] ?? []).map((option) => (
-                <option key={option} value={option}>
-                  {optionLabel(key, option)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <MultiSelectFilter
+            key={key}
+            label={label}
+            all={all}
+            plural={plural}
+            options={facets?.[key] ?? []}
+            selected={filters[key] ?? []}
+            onChange={(values) => onChange(key, values)}
+            optionLabel={(value) => optionLabel(key, value)}
+          />
         );
       })}
     </div>
@@ -66,7 +66,6 @@ export function CatalogScreen() {
   const { catalogVersion } = useReady();
   const favoritesState = useFavoritesState();
   const breakpoint = useBreakpoint();
-  const shortLandscape = useShortLandscape();
   const [params, setParams] = useSearchParams();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -74,22 +73,23 @@ export function CatalogScreen() {
   const text = params.get('q') ?? '';
   const pageNumber = Number(params.get('p')) || 1;
   const selectedRef = params.get('ref');
-  const filters: CatalogFilters = {};
+  // Selección múltiple en la URL como parámetro repetido: ?marca=A&marca=B (compatible con enlaces de un solo valor).
+  const filters: SelectedFilters = {};
   for (const key of FILTER_KEYS) {
-    const value = params.get(FILTERS[key].param);
-    if (value) filters[key] = value;
+    const values = filterValues(params.getAll(FILTERS[key].param));
+    if (values.length) filters[key] = values;
   }
   const filtersKey = JSON.stringify(filters);
 
   const [draft, setDraft] = useState(text);
   const [editing, setEditing] = useState<string | null>(null);
 
-  const update = (changes: Record<string, string | null>, options?: { replace?: boolean }) => {
+  const update = (changes: Record<string, string | readonly string[] | null>, options?: { replace?: boolean }) => {
     setParams((current) => {
       const next = new URLSearchParams(current);
       for (const [key, value] of Object.entries(changes)) {
-        if (value) next.set(key, value);
-        else next.delete(key);
+        next.delete(key);
+        for (const v of filterValues(value ?? undefined)) next.append(key, v);
       }
       return next;
     }, options);
@@ -130,7 +130,8 @@ export function CatalogScreen() {
   const expanded = breakpoint === 'expanded';
   const items = (page?.items ?? []).map((product) => ({ product }));
   const listProps = { items, selectedRef, isFavorite: fav, onOpen: (ref: string) => update({ ref }), onFavorite };
-  const showDetail = Boolean(selectedRef) || (breakpoint === 'medium' && !shortLandscape);
+  // El panel de detalle solo existe con un producto elegido; sin él, el catálogo ocupa todo el ancho (fold y horizontal).
+  const showDetail = Boolean(selectedRef);
   const total = page ? formatCount(page.total) : '…';
 
   const search = (
@@ -148,7 +149,7 @@ export function CatalogScreen() {
   );
 
   return (
-    <div className="catalog">
+    <div className={`catalog ${showDetail ? 'catalog--detail' : ''}`}>
       <section className="catalog__list" aria-label="Catálogo">
         <div className="toolbar">
           <div className="toolbar__row toolbar__row--top">
@@ -164,7 +165,7 @@ export function CatalogScreen() {
               <FilterChips
               facets={facets}
               filters={filters}
-              onChange={(key, value) => update({ [FILTERS[key].param]: value || null, p: null })}
+              onChange={(key, values) => update({ [FILTERS[key].param]: values, p: null })}
               onClear={clearFilters}
             />
               {expanded && (
@@ -205,24 +206,17 @@ export function CatalogScreen() {
         {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => update({ p: p > 1 ? String(p) : null })} />}
       </section>
 
-      {showDetail &&
-        (selectedRef ? (
-          <ProductDetail
-            product={selected}
-            loading={loadingSelected}
-            favorite={fav(selectedRef)}
-            dismiss={breakpoint === 'compact' ? 'back' : 'close'}
-            overlay={breakpoint === 'compact'}
-            onDismiss={() => update({ ref: null })}
-            onFavorite={() => setEditing(selectedRef)}
-          />
-        ) : (
-          <aside className="detail" aria-label="Detalle de producto">
-            <EmptyState title="Selecciona un producto">
-              <span>El detalle se muestra aquí sin perder tu posición en la lista.</span>
-            </EmptyState>
-          </aside>
-        ))}
+      {showDetail && selectedRef && (
+        <ProductDetail
+          product={selected}
+          loading={loadingSelected}
+          favorite={fav(selectedRef)}
+          dismiss={breakpoint === 'compact' ? 'back' : 'close'}
+          overlay={breakpoint === 'compact'}
+          onDismiss={() => update({ ref: null })}
+          onFavorite={() => setEditing(selectedRef)}
+        />
+      )}
 
       {editing && editingProduct && <EditFavoriteSheet product={editingProduct} onClose={() => setEditing(null)} />}
     </div>

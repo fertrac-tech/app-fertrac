@@ -98,7 +98,7 @@ describe('Catálogo (pantalla 03)', () => {
     for (const viewport of ['compact', 'medium', 'expanded'] as const) {
       const view = renderApp({ viewport });
       const group = await screen.findByRole('group', { name: 'Filtros' });
-      expect(within(group).getAllByRole('combobox')).toHaveLength(6);
+      expect(within(group).getAllByRole('button', { expanded: false })).toHaveLength(6);
       expect(screen.queryByRole('button', { name: /ocultar filtros/i })).not.toBeInTheDocument();
       view.unmount();
     }
@@ -110,14 +110,16 @@ describe('Catálogo (pantalla 03)', () => {
     await userEvent.click(clear);
     await waitFor(() => expect(window.location.search).toBe('?q=bomba'));
     expect(screen.getByRole('searchbox', { name: 'Buscar en el catálogo' })).toHaveValue('bomba');
-    expect(screen.getByRole('combobox', { name: 'Condición' })).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Condición: Todas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeDisabled();
   });
 
   it('los filtros se combinan con la búsqueda y se pueden limpiar', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Condición' }), 'NUEVO');
+    await userEvent.click(screen.getByRole('button', { name: /^Condición/ }));
+    await userEvent.click(screen.getByRole('option', { name: 'Nuevo' }));
+    await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(cards().every((c) => within(c).queryByText('NUEVO'))).toBe(true));
     expect(window.location.search).toBe('?condicion=NUEVO');
 
@@ -125,6 +127,49 @@ describe('Catálogo (pantalla 03)', () => {
     expect(await screen.findByText('Sin resultados')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Limpiar búsqueda y filtros' }));
     await waitFor(() => expect(cards()).toHaveLength(100));
+  });
+});
+
+describe('Filtros de selección múltiple con búsqueda', () => {
+  it('se escribe para acotar las opciones y se pueden marcar varias', async () => {
+    renderApp();
+    await screen.findByRole('list', { name: 'Productos' });
+    await userEvent.click(screen.getByRole('button', { name: 'Línea: Todas' }));
+    const input = screen.getByRole('combobox', { name: 'Buscar en Línea' });
+
+    await userEvent.type(input, 'fre');
+    const listbox = screen.getByRole('listbox', { name: 'Línea' });
+    expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toEqual(['FRENOS']);
+    await userEvent.keyboard('{Enter}');
+    expect(input).toHaveValue('');
+
+    await userEvent.type(input, 'mot');
+    await userEvent.click(within(listbox).getByRole('option', { name: 'MOTOR' }));
+    expect(within(listbox).getByRole('option', { name: 'FRENOS' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(listbox).getByRole('option', { name: 'MOTOR' })).toHaveAttribute('aria-selected', 'true');
+
+    await waitFor(() => expect(new URLSearchParams(window.location.search).getAll('linea')).toEqual(['FRENOS', 'MOTOR']));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Línea: 2 seleccionadas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Limpiar filtros · 2' })).toBeEnabled();
+  });
+
+  it('lee varios valores desde la URL y permite quitar uno', async () => {
+    renderApp({ route: '/?marca=ORIGINAL&marca=IMPORTADO' });
+    await waitFor(() => expect(cards().every((c) => /ORIGINAL|IMPORTADO/.test(c.textContent ?? ''))).toBe(true));
+    await userEvent.click(screen.getByRole('button', { name: 'Marca: 2 seleccionadas' }));
+    await userEvent.click(screen.getByRole('option', { name: 'ORIGINAL' }));
+    await waitFor(() => expect(window.location.search).toBe('?marca=IMPORTADO'));
+    expect(screen.getByRole('button', { name: 'Marca: IMPORTADO' })).toBeInTheDocument();
+  });
+
+  it('sin coincidencias muestra un aviso', async () => {
+    renderApp();
+    await screen.findByRole('list', { name: 'Productos' });
+    await userEvent.click(screen.getByRole('button', { name: 'Tipo: Todos' }));
+    await userEvent.type(screen.getByRole('combobox', { name: 'Buscar en Tipo' }), 'zzzz');
+    expect(screen.getByText('Sin coincidencias')).toBeInTheDocument();
   });
 });
 
@@ -173,14 +218,22 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
     expect(within(nav).getByRole('link', { name: 'Catálogo' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('fold abierto: riel + lista + panel de detalle siempre visible', async () => {
+  it('fold abierto: el catálogo usa todo el ancho y el detalle solo aparece al elegir un producto', async () => {
     renderApp({ viewport: 'medium' });
+    const catalogEl = () => document.querySelector('.catalog');
     await screen.findByRole('list', { name: 'Productos' });
     expect(screen.getByRole('navigation', { name: 'Navegación principal' })).toHaveClass('rail');
-    expect(screen.getByRole('complementary', { name: 'Detalle de producto' })).toHaveTextContent('Selecciona un producto');
+    expect(screen.queryByRole('complementary', { name: 'Detalle de producto' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Selecciona un producto')).not.toBeInTheDocument();
+    expect(catalogEl()).not.toHaveClass('catalog--detail');
+
     await userEvent.click(within(cards()[0] as HTMLElement).getAllByRole('button')[0] as HTMLElement);
     expect(await screen.findByRole('button', { name: 'Cerrar detalle' })).toBeInTheDocument();
+    expect(catalogEl()).toHaveClass('catalog--detail');
     expect(screen.getByRole('list', { name: 'Productos' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
+    await waitFor(() => expect(catalogEl()).not.toHaveClass('catalog--detail'));
   });
 
   it('teléfono en horizontal (932×430): sin panel de detalle vacío; al elegir un producto se abre a un lado', async () => {

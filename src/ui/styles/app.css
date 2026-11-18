@@ -739,6 +739,117 @@ p {
   opacity: 0.6;
   cursor: default;
 }
+/* Filtro de selección múltiple con búsqueda */
+.filter {
+  position: relative;
+  flex: none;
+}
+.filter > .chip {
+  cursor: pointer;
+}
+.filter__pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 55; /* sobre la barra inferior y el riel, debajo de hojas y diálogos */
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 32px)); /* `left` lo calcula el componente para no salirse de la pantalla */
+  max-height: min(360px, 60vh);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+  overflow: hidden;
+}
+.filter__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px;
+  padding: 0 10px;
+  min-height: 36px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-app);
+  color: var(--text-secondary);
+}
+.filter__search:focus-within {
+  border-color: var(--brand-primary);
+}
+.filter__search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 13px;
+}
+.filter__list {
+  flex: 1;
+  margin: 0;
+  padding: 0 4px 4px;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.filter__opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+}
+.filter__opt--active {
+  background: var(--bg-subtle);
+}
+.filter__opt[aria-selected='true'] {
+  font-weight: 600;
+}
+.filter__box {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-default);
+  border-radius: 4px;
+  color: var(--text-inverse);
+}
+.filter__box--on {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary);
+}
+.filter__empty {
+  margin: 0;
+  padding: 12px 16px 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.filter__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.filter__reset {
+  border: 0;
+  background: none;
+  color: var(--brand-primary-strong);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
 .chip--dashed {
   border-style: dashed;
 }
@@ -1687,18 +1798,18 @@ p {
   }
 }
 @media (min-width: 600px) and (max-width: 1023.98px) {
-  /* Fold abierto: riel (72) + lista + detalle. */
+  /* Fold abierto: riel (72) + lista; el detalle se abre a un lado solo con un producto elegido. */
   .catalog__list {
     flex: 0 0 clamp(300px, 48vw, 420px);
   }
-  /* Sin panel de detalle (teléfono en horizontal sin producto elegido): la lista usa todo el ancho. */
-  .catalog > .catalog__list:only-child {
+  /* Sin producto elegido la lista usa todo el ancho (fold abierto y teléfono en horizontal). */
+  .catalog:not(.catalog--detail) > .catalog__list {
     flex: 1 1 auto;
   }
 }
 /* En plegables, la división lista/detalle coincide con la bisagra. */
 @media (min-width: 600px) and (max-width: 1023.98px) and (horizontal-viewport-segments: 2) {
-  .catalog__list {
+  .catalog--detail > .catalog__list {
     flex: 0 0 calc(env(viewport-segment-width 0 0) - 72px);
     max-width: none;
   }
