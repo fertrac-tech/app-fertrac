@@ -748,13 +748,11 @@ p {
   cursor: pointer;
 }
 .filter__pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  /* Ubicado respecto a la pantalla (top/left/width los calcula el componente): nunca desplaza la página. */
+  position: fixed;
   z-index: 55; /* sobre la barra inferior y el riel, debajo de hojas y diálogos */
   display: flex;
   flex-direction: column;
-  width: min(300px, calc(100vw - 32px)); /* `left` lo calcula el componente para no salirse de la pantalla */
   max-height: min(360px, 60vh);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);

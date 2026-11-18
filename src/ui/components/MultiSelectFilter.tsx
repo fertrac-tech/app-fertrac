@@ -2,6 +2,34 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Keyb
 import { normalize } from '@/domain/text';
 import { Icon } from './primitives';
 
+export interface PopoverPlacement {
+  top: number;
+  left: number;
+  width: number;
+  maxHeight: number;
+}
+
+const POPOVER_WIDTH = 300;
+const POPOVER_MAX_HEIGHT = 360;
+const EDGE = 8;
+
+/**
+ * Posición del panel en coordenadas de pantalla: alineado al borde izquierdo del chip si cabe,
+ * si no al borde derecho, y siempre dentro de la pantalla con 8 px de margen.
+ */
+export function popoverPlacement(
+  trigger: { left: number; right: number; bottom: number },
+  viewport: { width: number; height: number },
+): PopoverPlacement {
+  const width = Math.min(POPOVER_WIDTH, viewport.width - EDGE * 2);
+  const fitsRight = trigger.left + width <= viewport.width - EDGE;
+  const preferred = fitsRight ? trigger.left : trigger.right - width;
+  const left = Math.min(Math.max(preferred, EDGE), viewport.width - EDGE - width);
+  const top = trigger.bottom + 6;
+  const maxHeight = Math.max(160, Math.min(POPOVER_MAX_HEIGHT, viewport.height - top - EDGE));
+  return { top, left, width, maxHeight };
+}
+
 export interface MultiSelectFilterProps {
   /** Nombre del filtro ("Marca"). */
   label: string;
@@ -24,7 +52,7 @@ export function MultiSelectFilter({ label, all, plural, options, selected, onCha
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const [offset, setOffset] = useState(0);
+  const [position, setPosition] = useState<PopoverPlacement | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -56,18 +84,41 @@ export function MultiSelectFilter({ label, all, plural, options, selected, onCha
     return () => document.removeEventListener('pointerdown', onPointer);
   }, [open]);
 
-  // El panel se desplaza en horizontal lo justo para quedar siempre dentro de la pantalla (margen de 16 px).
+  /**
+   * Ubica el panel respecto a la pantalla (position: fixed), nunca respecto a la página:
+   * se alinea al borde izquierdo del chip si cabe; si no, a su borde derecho; y siempre queda
+   * dentro de la pantalla con 8 px de margen. Así nunca provoca desplazamiento horizontal.
+   */
+  const place = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const viewport = {
+      width: document.documentElement.clientWidth || window.innerWidth,
+      height: window.innerHeight,
+    };
+    setPosition(popoverPlacement(rect, viewport));
+  };
+
   useLayoutEffect(() => {
-    if (!open) return;
-    const rect = rootRef.current?.getBoundingClientRect();
-    if (rect) {
-      const margin = 16;
-      const width = Math.min(300, window.innerWidth - margin * 2);
-      const overflowRight = rect.left + width - (window.innerWidth - margin);
-      setOffset(-Math.max(0, Math.min(overflowRight, rect.left - margin)));
+    if (!open) {
+      setPosition(null);
+      return;
     }
-    inputRef.current?.focus();
+    place();
+    // Si cambia el tamaño o se desplaza la lista, el panel acompaña al chip.
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // El foco va al buscador cuando el panel ya está ubicado, y sin desplazar la pantalla.
+  useEffect(() => {
+    if (open && position) inputRef.current?.focus({ preventScroll: true });
+  }, [open, position !== null]);
 
   useEffect(() => {
     if (!open) setQuery('');
@@ -127,7 +178,10 @@ export function MultiSelectFilter({ label, all, plural, options, selected, onCha
         <Icon name="down" size={14} />
       </button>
       {open && (
-        <div className="filter__pop" style={{ left: offset }}>
+        <div
+          className="filter__pop"
+          style={position ?? { visibility: 'hidden' }}
+        >
           <label className="filter__search">
             <Icon name="search" size={16} />
             <input
