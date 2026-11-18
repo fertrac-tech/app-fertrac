@@ -92,9 +92,12 @@ export function MultiSelectFilter({ label, all, plural, options, selected, onCha
   const place = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
+    // Descuenta la barra de navegación/tareas del sistema (área segura inferior que reserva #root).
+    const root = document.getElementById('root');
+    const safeBottom = root ? parseFloat(getComputedStyle(root).paddingBottom) || 0 : 0;
     const viewport = {
       width: document.documentElement.clientWidth || window.innerWidth,
-      height: window.innerHeight,
+      height: window.innerHeight - safeBottom,
     };
     setPosition(popoverPlacement(rect, viewport));
   };

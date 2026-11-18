@@ -10,7 +10,9 @@
 // Hojas (en CONFIG.ID_BASE_MOTOR):
 //   USUARIOS AUTORIZADOS  A = EMAIL (desde fila 2) + columnas ubicadas POR ENCABEZADO:
 //     CANAL  ∈ APP | WEB | AMBOS     (vacío = CONFIG.CANAL_POR_DEFECTO)
-//     ESTADO ∈ ACTIVO | SUSPENDIDO   (vacío = ACTIVO)
+//     ESTADO ∈ ACTIVO | PENDIENTE | SUSPENDIDO | HIGH LEVEL   (vacío = ACTIVO)
+//       HIGH LEVEL: acceso desde CUALQUIER dispositivo y canal, sin aprobación en DISPOSITIVOS
+//       (sigue exigiendo cuenta Google verificada y estar en esta lista). Para revocarlo: SUSPENDIDO.
 //     NOTA
 //   DISPOSITIVOS  (la crea prepararHojasAutorizacion)
 //     EMAIL | DEVICE_ID | CANAL | PLATAFORMA | MODELO | VERSION_APP | FECHA_REGISTRO |
@@ -18,6 +20,7 @@
 //     ESTADO ∈ PENDIENTE | APROBADO | BLOQUEADO
 //
 // Regla: usuario ACTIVO ∧ canal permitido ∧ dispositivo APROBADO de ese canal.
+//        usuario HIGH LEVEL → acceso directo (solo deja traza en "Log App").
 // Canal = prefijo del device_id: "and-" → APP (APK) · "web-" → WEB (navegador y PWA).
 //
 // CONFIG.ENFORCE_DISPOSITIVOS = false → OBSERVACIÓN: registra dispositivos,
@@ -44,7 +47,8 @@ DISP_COLS.forEach(function (c, i) { DC[c] = i + 1; });
 
 const ESTADOS_DISP    = ["PENDIENTE", "APROBADO", "BLOQUEADO"];
 const CANALES_USUARIO = ["APP", "WEB", "AMBOS"];
-const ESTADOS_USUARIO = ["ACTIVO", "PENDIENTE", "SUSPENDIDO"];
+const ESTADO_HIGH_LEVEL = "HIGH LEVEL";
+const ESTADOS_USUARIO = ["ACTIVO", "PENDIENTE", "SUSPENDIDO", ESTADO_HIGH_LEVEL];
 // Estados de USUARIO que bloquean SIEMPRE (también en modo observación de dispositivos).
 const ACL_BLOQUEAN_SIEMPRE = ["no_autorizado", "usuario_pendiente", "usuario_suspendido"];
 
@@ -56,10 +60,12 @@ function normCanalUsuario_(v) {
   return CANALES_USUARIO.indexOf(c) >= 0 ? c : CONFIG.CANAL_POR_DEFECTO;
 }
 // Vacío = ACTIVO (compatibilidad con la lista histórica). PENDIENTE y SUSPENDIDO se respetan.
+// HIGH LEVEL admite variantes de escritura (High Level, HIGH_LEVEL, HIGH-LEVEL, HIGHLEVEL).
 // Cualquier otro texto se trata como PENDIENTE: un error de digitación nunca concede acceso.
 function normEstadoUsuario_(v) {
   const e = _aclTxt_(v).toUpperCase();
   if (e === "" || e === "ACTIVO") return "ACTIVO";
+  if (e.replace(/[^A-Z]/g, "") === "HIGHLEVEL") return ESTADO_HIGH_LEVEL;
   return e === "SUSPENDIDO" ? "SUSPENDIDO" : "PENDIENTE";
 }
 function normEstadoDisp_(v) {
@@ -212,6 +218,13 @@ function evaluarAccesoDispositivo_(email, azp, params) {
   }
   if (u.estado === "SUSPENDIDO") return r("usuario_suspendido");
 
+  // HIGH LEVEL: entra desde cualquier dispositivo y canal. No se registra en DISPOSITIVOS,
+  // no aplica límite, canal ni bloqueo de web en Android, y no envía correos al aprobador.
+  if (u.estado === ESTADO_HIGH_LEVEL) {
+    trazarAccesoHighLevel_(email, device, canal, azp, params);
+    return r("ok", { highLevel: true });
+  }
+
   // Usuario PENDIENTE: se registra su dispositivo (una vez) para aprobar las dos capas juntas.
   // Nunca recibe datos: el código se aplica siempre (ver resolverEstadoAcl_).
   if (u.estado === "PENDIENTE") {
@@ -261,6 +274,20 @@ function evaluarAccesoDispositivo_(email, azp, params) {
   }
   marcarUsoDispositivo_(d, params);
   return r("ok");
+}
+
+// Traza de auditoría para HIGH LEVEL: una línea en "Log App" por usuario y dispositivo cada hora.
+function trazarAccesoHighLevel_(email, device, canal, azp, params) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const k = "acl_hl_" + email + "_" + (device || "-");
+    if (cache.get(k)) return;
+    cache.put(k, "1", ACL_TTL_USO);
+    const detalle = "azp=" + _aclTxt_(azp) + " plat=" + _aclTxt_(params.plat) + " modelo=" + _aclTxt_(params.modelo) +
+      " ver=" + _aclTxt_(params.ver);
+    registrarLog_("info", "backend", "acl", "HIGH LEVEL " + email + " " + (canal || "-") + " " +
+      (device ? "…" + device.slice(-6) : "-"), "", detalle, email);
+  } catch (err) {}
 }
 
 // Traduce el veredicto al `estado` de doGet según el modo (observación / cumplimiento).
@@ -601,7 +628,8 @@ function prepararHojasAutorizacion() {
 
   invalidarCacheAutorizacion_();
   console.log("✅ Autorización preparada: hoja " + CONFIG.SHEET_DISPOSITIVOS + " (protegida) + columnas CANAL/ESTADO/NOTA en " +
-    CONFIG.SHEET_USERS + ". CANAL vacío = " + CONFIG.CANAL_POR_DEFECTO + ", ESTADO vacío = ACTIVO.");
+    CONFIG.SHEET_USERS + ". CANAL vacío = " + CONFIG.CANAL_POR_DEFECTO + ", ESTADO vacío = ACTIVO." +
+    " ESTADO admite: " + ESTADOS_USUARIO.join(" · ") + ".");
 }
 
 // Instala (o reinstala) el disparador de aprobación. No toca los demás disparadores.
