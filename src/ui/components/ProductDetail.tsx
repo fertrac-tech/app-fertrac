@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { nativeMedia } from '@/adapters/device/nativeMedia';
 import { preparePhoto, shareOnWhatsApp } from '@/adapters/device/whatsappShare';
 import { downloadUrl, withThumbSize } from '@/domain/photo';
 import { shareText } from '@/domain/share';
@@ -64,6 +65,12 @@ async function downloadImage(src: string, fileName: string): Promise<boolean> {
     const blob = await response.blob();
     const mime = blob.type.split(';')[0] ?? '';
     if (!mime.startsWith('image/')) throw new Error('El origen no devolvió una imagen');
+    // APK: el WebView no descarga blobs con <a download>; se guarda en la galería (álbum Fertrac).
+    const native = nativeMedia();
+    if (native) {
+      await native.savePhoto(blob, fileName);
+      return true;
+    }
     const href = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = href;
@@ -239,7 +246,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
     if (!product?.photoUrl) return;
     setShare({ busy: true, notice: null });
     const ok = await downloadImage(withThumbSize(product.photoUrl, 1600), `fertrac-${product.ref.replace(/[^\w.-]+/g, '-')}`);
-    setShare({ busy: false, notice: ok ? 'Foto descargada.' : 'No se pudo descargar la foto.' });
+    setShare({ busy: false, notice: ok ? (nativeMedia() ? 'Foto guardada en la galería, álbum Fertrac.' : 'Foto descargada.') : 'No se pudo descargar la foto.' });
   };
   return (
     <aside className={`detail ${overlay ? 'detail--overlay' : ''}`} aria-label="Detalle de producto">

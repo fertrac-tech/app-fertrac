@@ -1197,6 +1197,15 @@ p {
 .row[data-tier='2'] {
   background: var(--state-promo-soft);
 }
+/* Promoción con color propio (CONDICIÓN "MAGENTA", "VERDE"…): el resaltado de la
+   fila/tarjeta usa ese color en lugar del azul genérico de promoción. */
+.card[data-tier='2'][data-color] .card__accent,
+.row[data-tier='2'][data-color]::before {
+  background: var(--c);
+}
+.row[data-tier='2'][data-color] {
+  background: color-mix(in srgb, var(--c) 10%, var(--bg-surface));
+}
 .row:hover,
 .row[data-selected='true'] {
   box-shadow: inset 0 0 0 9999px rgb(244 121 32 / 0.08);

@@ -1,6 +1,7 @@
 import { downloadUrl, withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { shareFileName, shareText, whatsappUrl } from '@/domain/share';
+import { nativeMedia, type NativeMedia } from './nativeMedia';
 
 /** Capacidades del dispositivo, inyectables para pruebas. */
 export interface ShareEnv {
@@ -11,6 +12,8 @@ export interface ShareEnv {
   /** Copia la imagen al portapapeles (escritorio) para pegarla con Ctrl+V en WhatsApp Web. */
   copyImage?: (blob: Blob) => Promise<void>;
   open: (url: string) => void;
+  /** Solo en la APK: plugins nativos de Capacitor (el WebView no tiene Web Share con archivos). */
+  native?: Pick<NativeMedia, 'share'> | null;
 }
 
 export type ShareResult = { status: 'shared' } | { status: 'cancelled' } | { status: 'opened'; photoCopied: boolean };
@@ -60,6 +63,14 @@ export async function shareOnWhatsApp(
   const text = shareText(product, alias);
   const photo = prepared !== undefined ? prepared : await preparePhoto(product, env);
 
+  if (env.native) {
+    try {
+      return { status: await env.native.share(photo, text) };
+    } catch {
+      // Falla del plugin: se sigue con el flujo web.
+    }
+  }
+
   if (photo && env.share && env.canShare?.({ files: [photo], text })) {
     try {
       await env.share({ files: [photo], text });
@@ -104,5 +115,6 @@ export function browserShareEnv(): ShareEnv {
     // ClipboardItem acepta una promesa: conserva la activación del usuario mientras se convierte a PNG.
     copyImage: hasClipboardImage ? (blob) => nav!.clipboard.write([new ClipboardItem({ 'image/png': toPng(blob) })]) : undefined,
     open: (url) => window.open(url, '_blank', 'noopener,noreferrer'),
+    native: nativeMedia(),
   };
 }

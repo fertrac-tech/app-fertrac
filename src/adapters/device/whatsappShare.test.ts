@@ -65,6 +65,22 @@ describe('shareOnWhatsApp', () => {
   });
 });
 
+describe('shareOnWhatsApp en la APK', () => {
+  it('usa la hoja nativa de Android con la foto aunque el WebView no tenga Web Share', async () => {
+    const native = { share: vi.fn(async () => 'shared' as const) };
+    const e = env({ native });
+    const file = new File(['x'], 'fertrac-AMK-2210.jpg', { type: 'image/jpeg' });
+    expect(await shareOnWhatsApp(product, null, e, file)).toEqual({ status: 'shared' });
+    expect(native.share).toHaveBeenCalledWith(file, expect.stringContaining('Precio: $ 412.000'));
+    expect(e.open).not.toHaveBeenCalled();
+  });
+  it('si el plugin falla, cae al enlace de WhatsApp', async () => {
+    const e = env({ native: { share: vi.fn(async () => { throw new Error('boom'); }) } });
+    expect(await shareOnWhatsApp(product, null, e, null)).toEqual({ status: 'opened', photoCopied: false });
+    expect(e.open).toHaveBeenCalledOnce();
+  });
+});
+
 describe('preparePhoto', () => {
   it('si w800 falla reintenta con el tamaño original', async () => {
     const fetch = vi.fn(async (url: string) => (url.endsWith('=w800') ? ({ ok: false } as Response) : jpeg()));

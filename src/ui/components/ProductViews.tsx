@@ -28,7 +28,7 @@ export function ProductCards({ items, selectedRef, isFavorite, onOpen, onFavorit
         const favorite = isFavorite(product.ref);
         return (
           <li key={product.ref}>
-            <article className="card" data-tier={priorityTier(product)} data-selected={selectedRef === product.ref}>
+            <article className="card" data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
               <span className="card__accent" />
               <div className="card__body">
                 <button type="button" className="card__open" onClick={() => onOpen(product.ref)}>
@@ -78,7 +78,7 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
           const favorite = isFavorite(product.ref);
           const condition = conditionLabel(product);
           return (
-            <div className="row" role="row" key={product.ref} data-tier={priorityTier(product)} data-selected={selectedRef === product.ref}>
+            <div className="row" role="row" key={product.ref} data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
               <span role="cell"><Thumb url={product.photoUrl} /></span>
               <span role="cell" className="row__ref">{product.ref}</span>
               <span role="cell" className="row__brand col-brand">{product.brand}</span>
