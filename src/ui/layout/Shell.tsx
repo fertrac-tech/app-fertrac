@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useHref, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import type { MouseEvent } from 'react';
 import { fadeThrough } from '../motion/viewTransition';
+import { focusSearch, hasOpenModal, isSearchShortcut } from '../keyboard/searchShortcut';
 import { countByList, totalFavorites } from '@/domain/favorites';
 import { formatSyncTime } from '@/domain/text';
 import { ListNameSheet } from '../components/FavoriteSheets';
@@ -213,6 +214,25 @@ export function Shell() {
   useEffect(() => {
     try { window.localStorage.setItem('fertrac_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* noop */ }
   }, [navCollapsed]);
+
+  /**
+   * Ctrl + B (⌘ + B en macOS): foco en el buscador de la pantalla actual.
+   * Si la pantalla no tiene buscador (Perfil, Favoritos con pocas referencias) va al catálogo y lo enfoca.
+   * Con una hoja o el detalle móvil abiertos no actúa.
+   */
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isSearchShortcut(event) || hasOpenModal()) return;
+      event.preventDefault();
+      if (focusSearch()) return;
+      navigate('/');
+      let tries = 0;
+      const retry = () => { if (!focusSearch() && ++tries < 10) requestAnimationFrame(retry); };
+      requestAnimationFrame(retry);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
 
   return (
     <div className="shell" data-breakpoint={breakpoint} data-nav-collapsed={navCollapsed} onClickCapture={onNavClick}>
