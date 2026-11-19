@@ -14,7 +14,8 @@ export const CONTENT_SECURITY_POLICY = [
   "script-src 'self' https://accounts.google.com/gsi/client",
   // 'unsafe-inline' en estilos: el botón de Google aplica estilos en línea. No habilita scripts.
   "style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style",
-  "connect-src 'self' https://accounts.google.com/gsi/ https://script.google.com https://script.googleusercontent.com",
+  // lh3.googleusercontent.com: "Descargar foto" pide la imagen con fetch (Drive thumbnail no tiene CORS).
+  "connect-src 'self' https://accounts.google.com/gsi/ https://script.google.com https://script.googleusercontent.com https://lh3.googleusercontent.com",
   "frame-src https://accounts.google.com/gsi/",
   // Fotos de producto (miniaturas de Drive → googleusercontent) y foto de perfil de Google.
   "img-src 'self' data: blob: https://drive.google.com https://*.googleusercontent.com",
