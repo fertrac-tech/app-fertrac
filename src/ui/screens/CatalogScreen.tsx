@@ -23,6 +23,9 @@ const FILTERS: Record<FilterKey, { param: string; label: string; all: string; pl
   condition: { param: 'condicion', label: 'Condición', all: 'Todas', plural: 'seleccionadas' },
 };
 
+/** Filtros visibles en el catálogo. "Línea" se retiró de la interfaz (se ignora también en la URL). */
+const VISIBLE_FILTERS = FILTER_KEYS.filter((key) => key !== 'line');
+
 const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition] ?? value : value);
 
 type SelectedFilters = Partial<Record<FilterKey, string[]>>;
@@ -43,7 +46,7 @@ function FilterChips({ facets, filters, onChange, onClear }: FilterChipsProps) {
         <Icon name="close" size={14} />
         Limpiar filtros{active > 0 ? ` · ${active}` : ''}
       </button>
-      {FILTER_KEYS.map((key) => {
+      {VISIBLE_FILTERS.map((key) => {
         const { label, all, plural } = FILTERS[key];
         return (
           <MultiSelectFilter
@@ -76,7 +79,7 @@ export function CatalogScreen() {
   const selectedRef = params.get('ref');
   // Selección múltiple en la URL como parámetro repetido: ?marca=A&marca=B (compatible con enlaces de un solo valor).
   const filters: SelectedFilters = {};
-  for (const key of FILTER_KEYS) {
+  for (const key of VISIBLE_FILTERS) {
     const values = filterValues(params.getAll(FILTERS[key].param));
     if (values.length) filters[key] = values;
   }

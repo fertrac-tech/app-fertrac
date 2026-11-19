@@ -42,6 +42,11 @@ const FEATURED: Product[] = [
   { ref: 'KEM-1550', name: 'KIT EMBRAGUE 15.5"', brand: 'ORIGINAL', line: 'TRANSMISION', category: 'Embrague', subcategory: 'Kits', type: '15.5"', application: 'Eaton Fuller', alternates: '108925-82', condition: 'NORMAL', stock: 4, prices: { gross: 3450000, net5: 3277500, net8: 3174000, promo: null }, promoEnds: null, photoUrl: null },
   { ref: 'RAF-0780', name: 'RACHE AUTOMÁTICO FRENO', brand: 'IMPORTADO', line: 'FRENOS', category: 'Freno de aire', subcategory: 'Raches', type: 'Automático', application: 'Eje trasero', alternates: '40010211', condition: 'NORMAL', stock: 9, prices: { gross: 215000, net5: 204250, net8: 197800, promo: null }, promoEnds: null, photoUrl: null },
   { ref: 'TDI-0412', name: 'TERMINAL DIRECCIÓN IZQ.', brand: 'FERTRAC', line: 'DIRECCION', category: 'Terminales', subcategory: 'Dirección', type: 'Izquierdo', application: 'Freightliner', alternates: 'ES3172L', condition: 'NORMAL', stock: 0, prices: { gross: 134000, net5: 127300, net8: 123280, promo: null }, promoEnds: null, photoUrl: null },
+  // Textos largos (solo demo): para verificar que tarjetas y tabla muestran la información completa.
+  { ref: 'ABR-LARGO-0001', name: 'ABRAZADERA DE ESCAPE TIPO BANDA EN ACERO INOXIDABLE CON EMPAQUE DE GRAFITO PARA TUBO DE 5 PULGADAS KENWORTH T800 / T660 / W900', brand: 'DISTRIBUIDORA INTERNACIONAL DE REPUESTOS PESADOS', line: 'MOTOR', category: 'Escape', subcategory: 'Abrazaderas', type: 'Banda', application: 'Kenworth T800, T660 y W900 con motor Cummins ISX15 y Paccar MX-13', alternates: 'K178-1234, 10-5501, ABR5IN-SS', condition: 'NUEVO', stock: 125, prices: { gross: 1890000, net5: 1795500, net8: 1738800, promo: null }, promoEnds: null, photoUrl: null },
+  { ref: 'ACT-ROTOCHAMBER-30/30-LS', name: 'ACTUADOR DE FRENO DE AIRE DOBLE DIAFRAGMA 30/30 CARRERA LARGA CON VARILLA ROSCADA Y TAPA ANTIMANIPULACIÓN', brand: 'IMPORTADO', line: 'FRENOS', category: 'Freno de aire', subcategory: 'Actuadores', type: 'Doble 30/30', application: 'Ejes traseros tractocamión y tráiler', alternates: 'GC3030LS, 3030-LSR', condition: 'PROMO', promoColor: 'magenta', conditionText: 'Magenta', stock: 7, prices: { gross: 12450000, net5: 11827500, net8: 11454000, promo: 11200000 }, promoEnds: '30 de noviembre', photoUrl: null },
+  { ref: 'ALT-24V-160A', name: 'ALTERNADOR', brand: 'REPUESTOS Y SUMINISTROS PARA TRANSPORTE DE CARGA PESADA S.A.S.', line: 'ELECTRICO', category: 'Eléctrico', subcategory: 'Alternadores', type: '24 V', application: 'Freightliner Cascadia', alternates: '8600311', condition: 'NORMAL', stock: 3, prices: { gross: 2350000, net5: 2232500, net8: 2162000, promo: null }, promoEnds: null, photoUrl: null },
+  { ref: 'AMO-SUPERLARGOREFERENCIA-1234567890', name: 'AMORTIGUADORDESUSPENSIONDELANTERAHIDRAULICOREFORZADOSINESPACIOS', brand: 'FERTRAC', line: 'SUSPENSION', category: 'Suspensión', subcategory: 'Amortiguadores', type: 'Hidráulico', application: 'International ProStar', alternates: 'AMO-1', condition: 'NORMAL', stock: 0, prices: { gross: 98000, net5: 93100, net8: 90160, promo: null }, promoEnds: null, photoUrl: null },
 ];
 
 export function buildMockCatalog(size = 4732): Product[] {
@@ -90,5 +95,5 @@ export function buildMockCatalog(size = 4732): Product[] {
       photoUrl: i % 4 === 3 ? null : DEMO_PHOTO_URL,
     });
   }
-  return products;
+  return products.slice(0, size);
 }

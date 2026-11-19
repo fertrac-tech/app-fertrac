@@ -111,7 +111,7 @@ describe('Catálogo (pantalla 03)', () => {
     for (const viewport of ['compact', 'medium', 'expanded'] as const) {
       const view = renderApp({ viewport });
       const group = await screen.findByRole('group', { name: 'Filtros' });
-      expect(within(group).getAllByRole('button', { expanded: false })).toHaveLength(6);
+      expect(within(group).getAllByRole('button', { expanded: false })).toHaveLength(5);
       expect(screen.queryByRole('button', { name: /ocultar filtros/i })).not.toBeInTheDocument();
       view.unmount();
     }
@@ -144,27 +144,34 @@ describe('Catálogo (pantalla 03)', () => {
 });
 
 describe('Filtros de selección múltiple con búsqueda', () => {
+  it('no muestra el filtro Línea', async () => {
+    renderApp({ route: '/?linea=FRENOS' });
+    await screen.findByRole('list', { name: 'Productos' });
+    expect(screen.queryByRole('button', { name: /^Línea/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeDisabled();
+  });
+
   it('se escribe para acotar las opciones y se pueden marcar varias', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
-    await userEvent.click(screen.getByRole('button', { name: 'Línea: Todas' }));
-    const input = screen.getByRole('combobox', { name: 'Buscar en Línea' });
+    await userEvent.click(screen.getByRole('button', { name: 'Marca: Todas' }));
+    const input = screen.getByRole('combobox', { name: 'Buscar en Marca' });
 
-    await userEvent.type(input, 'fre');
-    const listbox = screen.getByRole('listbox', { name: 'Línea' });
-    expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toEqual(['FRENOS']);
-    await userEvent.keyboard('{Enter}');
-    expect(input).toHaveValue('');
+    await userEvent.type(input, 'origi');
+    const listbox = screen.getByRole('listbox', { name: 'Marca' });
+    expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toContain('ORIGINAL');
+    await userEvent.click(within(listbox).getByRole('option', { name: 'ORIGINAL' }));
+    await userEvent.clear(input);
 
-    await userEvent.type(input, 'mot');
-    await userEvent.click(within(listbox).getByRole('option', { name: 'MOTOR' }));
-    expect(within(listbox).getByRole('option', { name: 'FRENOS' })).toHaveAttribute('aria-selected', 'true');
-    expect(within(listbox).getByRole('option', { name: 'MOTOR' })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.type(input, 'impor');
+    await userEvent.click(within(listbox).getByRole('option', { name: 'IMPORTADO' }));
+    expect(within(listbox).getByRole('option', { name: 'ORIGINAL' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(listbox).getByRole('option', { name: 'IMPORTADO' })).toHaveAttribute('aria-selected', 'true');
 
-    await waitFor(() => expect(new URLSearchParams(window.location.search).getAll('linea')).toEqual(['FRENOS', 'MOTOR']));
+    await waitFor(() => expect(new URLSearchParams(window.location.search).getAll('marca').sort()).toEqual(['IMPORTADO', 'ORIGINAL']));
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Línea: 2 seleccionadas' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Marca: 2 seleccionadas' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Limpiar filtros · 2' })).toBeEnabled();
   });
 

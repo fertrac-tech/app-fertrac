@@ -36,7 +36,7 @@ export function ProductCards({ items, selectedRef, isFavorite, onOpen, onFavorit
                   <span className="card__info">
                     <ConditionPill condition={product.condition} promoColor={product.promoColor} />
                     <span className="card__name">{alias || product.name}</span>
-                    <span className="card__sub truncate">
+                    <span className="card__sub">
                       {product.ref} · {alias ? product.name : product.brand}
                     </span>
                   </span>
@@ -80,10 +80,10 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
           return (
             <div className="row" role="row" key={product.ref} data-tier={priorityTier(product)} data-selected={selectedRef === product.ref}>
               <span role="cell"><Thumb url={product.photoUrl} /></span>
-              <span role="cell" className="row__ref truncate">{product.ref}</span>
-              <span role="cell" className="row__brand col-brand truncate">{product.brand}</span>
-              <span role="cell" className="truncate">
-                <button type="button" className="row__open row__name truncate" onClick={() => onOpen(product.ref)}>
+              <span role="cell" className="row__ref">{product.ref}</span>
+              <span role="cell" className="row__brand col-brand">{product.brand}</span>
+              <span role="cell" className="row__product">
+                <button type="button" className="row__open row__name" onClick={() => onOpen(product.ref)}>
                   {alias || product.name}
                 </button>
               </span>
