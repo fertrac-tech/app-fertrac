@@ -589,3 +589,59 @@
 @media (prefers-reduced-transparency: reduce) {
   .lightbox__sheet { background: var(--bg-surface); }
 }
+
+/* ============ Detalle · Dock de vidrio de acciones (opción 3b) ============
+   Isla de vidrio con WhatsApp, Copiar y Foto (destacada). Objetivos de 56 px con etiqueta
+   (Apple toolbar / M3 barra de acciones); un solo elemento destacado (M3 / Fluent 2). */
+.detail__action {
+  padding: 8px 12px 12px;
+}
+.detail__dock {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 26px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: var(--glass-shadow);
+}
+.dock__item {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 4px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.dock__item:hover:not(:disabled) { background: var(--glass-item); }
+.dock__item:focus-visible { outline: 2px solid var(--brand-ui); outline-offset: 2px; }
+.dock__item:disabled { opacity: 0.5; cursor: default; }
+.dock__item--primary,
+.dock__item--primary:hover:not(:disabled) {
+  background: var(--action-bg);
+  color: var(--action-fg);
+}
+.dock__item--primary:hover:not(:disabled) { filter: brightness(1.06); }
+.dock__wa {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #25d366;
+  color: #fff;
+}

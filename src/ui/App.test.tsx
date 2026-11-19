@@ -222,6 +222,21 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     fetchMock.mockRestore();
   });
 
+  it('el dock de vidrio ofrece WhatsApp, Copiar y Foto; Favoritos queda solo en la estrella', async () => {
+    renderApp({ route: '/?ref=AMK-2210' });
+    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
+    await within(detail).findByRole('heading', { name: 'AMK-2210' });
+    const dock = within(detail).getByRole('toolbar', { name: 'Acciones del producto' });
+    expect(within(dock).getAllByRole('button').map((b) => b.textContent)).toEqual(['WhatsApp', 'Copiar', 'Foto']);
+    expect(within(detail).getAllByRole('button', { name: /favorito/i })).toHaveLength(1);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await userEvent.click(within(dock).getByRole('button', { name: 'Copiar texto del producto' }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Precio: $ 412.000'));
+    expect(writeText.mock.calls[0]?.[0]).not.toContain('391.400');
+    expect(await within(detail).findByRole('status')).toHaveTextContent('Texto copiado');
+  });
+
   it('la foto se amplía en un diálogo centrado y se cierra', async () => {
     const { container } = renderApp({ route: '/?ref=AMK-2210' });
     const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });

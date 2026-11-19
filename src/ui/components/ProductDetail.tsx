@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 
 import { createPortal } from 'react-dom';
 import { preparePhoto, shareOnWhatsApp } from '@/adapters/device/whatsappShare';
 import { downloadUrl, withThumbSize } from '@/domain/photo';
+import { shareText } from '@/domain/share';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
@@ -225,6 +226,21 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
             : 'Producto sin foto; se compartió sin foto.';
     setShare({ busy: false, notice });
   };
+  const onCopy = async () => {
+    if (!product) return;
+    try {
+      await navigator.clipboard.writeText(shareText(product, alias));
+      setShare({ busy: false, notice: 'Texto copiado: nombre, referencia y precio bruto.' });
+    } catch {
+      setShare({ busy: false, notice: 'No se pudo copiar el texto.' });
+    }
+  };
+  const onDownload = async () => {
+    if (!product?.photoUrl) return;
+    setShare({ busy: true, notice: null });
+    const ok = await downloadImage(withThumbSize(product.photoUrl, 1600), `fertrac-${product.ref.replace(/[^\w.-]+/g, '-')}`);
+    setShare({ busy: false, notice: ok ? 'Foto descargada.' : 'No se pudo descargar la foto.' });
+  };
   return (
     <aside className={`detail ${overlay ? 'detail--overlay' : ''}`} aria-label="Detalle de producto">
       <header className="detail__bar">
@@ -330,18 +346,27 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
           )}
           <div className="detail__action">
             {share.notice && <p className="detail__notice" role="status">{share.notice}</p>}
-            <div className="detail__buttons">
+            {/* Dock de vidrio (opción 3b): WhatsApp, Copiar texto y Foto como acción destacada.
+                Favoritos queda en la estrella de la barra (sin duplicado). */}
+            <div className="detail__dock" role="toolbar" aria-label="Acciones del producto">
+              <button type="button" className="dock__item" aria-label="Compartir por WhatsApp" aria-busy={share.busy} disabled={share.busy} onClick={() => void onShare()}>
+                <span className="dock__wa"><Icon name="chat" size={14} /></span>
+                <span>WhatsApp</span>
+              </button>
+              <button type="button" className="dock__item" aria-label="Copiar texto del producto" onClick={() => void onCopy()}>
+                <Icon name="copy" size={20} />
+                <span>Copiar</span>
+              </button>
               <button
                 type="button"
-                className="btn btn--outline btn--block"
-                aria-label="Compartir por WhatsApp"
-                disabled={share.busy}
-                onClick={() => void onShare()}
+                className="dock__item dock__item--primary"
+                aria-label="Descargar foto"
+                aria-busy={share.busy}
+                disabled={!product.photoUrl || share.busy}
+                onClick={() => void onDownload()}
               >
-                <Icon name="share" size={18} /> {share.busy ? 'Preparando…' : 'WhatsApp'}
-              </button>
-              <button type="button" className="btn btn--primary btn--block" onClick={onFavorite}>
-                <Icon name="star" size={18} /> {favorite ? 'Editar favorito' : 'Guardar en favoritos'}
+                <Icon name="download" size={20} />
+                <span>Foto</span>
               </button>
             </div>
           </div>
