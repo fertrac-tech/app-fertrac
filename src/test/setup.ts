@@ -21,3 +21,8 @@ if (!window.matchMedia) {
 }
 window.scrollTo = () => {};
 Element.prototype.scrollTo = () => {};
+
+// Las pruebas nunca salen a la red: cualquier fetch no simulado falla de inmediato.
+// Sin esto, componentes como ProductDetail (que precarga la foto al abrir) hacen
+// peticiones reales a Drive y el resultado depende de la latencia del runner.
+globalThis.fetch = (() => Promise.reject(new TypeError('Red deshabilitada en pruebas'))) as typeof fetch;
