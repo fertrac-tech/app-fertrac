@@ -1,0 +1,16 @@
+{
+  "appId": "com.fertrac.listaprecios",
+  "appName": "Fertrac",
+  "webDir": "www",
+  "server": {
+    "url": "https://app.fertrac.com/",
+    "cleartext": false,
+    "allowNavigation": [
+      "app.fertrac.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false,
+    "webContentsDebuggingEnabled": false
+  }
+}

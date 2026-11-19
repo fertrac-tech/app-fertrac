@@ -6,3 +6,15 @@ coverage
 .DS_Store
 .env.local
 .env.*.local
+# Artefactos y archivos generados
+.src-sync.tgz
+*.tgz
+# App Android (Capacitor): dependencias y salida de build
+app-android/node_modules/
+app-android/android/.gradle/
+app-android/android/build/
+app-android/android/app/build/
+app-android/android/local.properties
+# IDE (Android Studio)
+app-android/android/.idea/
+*.iml

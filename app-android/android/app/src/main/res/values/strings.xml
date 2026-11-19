@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Fertrac</string>
+    <string name="title_activity_main">Fertrac</string>
+    <string name="package_name">com.fertrac.listaprecios</string>
+    <string name="custom_url_scheme">com.fertrac.listaprecios</string>
+    <!-- SEC-02.3: número del proyecto de Google Cloud vinculado en Play Console. 0 = Play Integrity apagado. -->
+    <string name="play_integrity_cloud_project_number" translatable="false">0</string>
+</resources>
