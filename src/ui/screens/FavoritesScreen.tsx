@@ -6,8 +6,8 @@ import { normalize } from '@/domain/text';
 import { DeleteListSheet, EditFavoriteSheet, ListNameSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
 import { EmptyState, ListSkeleton, ProductCards, ProductTable, type ProductItem } from '../components/ProductViews';
-import { Icon } from '../components/primitives';
-import { useBreakpoint, useContainer, useShortLandscape, useFavoritesState, useQuery, useReady } from '../context';
+import { HeaderCurve, Icon } from '../components/primitives';
+import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 
 type Dialog = { kind: 'new' } | { kind: 'rename'; id: string } | { kind: 'delete'; id: string } | { kind: 'edit'; ref: string } | null;
 
@@ -63,7 +63,6 @@ export function FavoritesScreen() {
   const { catalogVersion } = useReady();
   const state = useFavoritesState();
   const breakpoint = useBreakpoint();
-  const shortLandscape = useShortLandscape();
   const [params, setParams] = useSearchParams();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [search, setSearch] = useState('');
@@ -108,8 +107,10 @@ export function FavoritesScreen() {
   const editingProduct = dialog?.kind === 'edit' ? allProducts?.find((p) => p.ref === dialog.ref) ?? selected : undefined;
 
   return (
-    <div className="catalog">
+    <div className={`catalog ${selectedRef && breakpoint !== 'compact' ? 'catalog--detail' : ''}`}>
       <section className="catalog__list" aria-label="Favoritos">
+        {/* Curva Fertrac: título, "Nueva lista" y chips de listas sobre el encabezado de marca. */}
+        <div className="toolbar toolbar--fav">
         <header className="pagehead">
           <div>
             <h1>Favoritos</h1>
@@ -133,6 +134,8 @@ export function FavoritesScreen() {
             </Link>
           ))}
         </div>
+        </div>
+        <HeaderCurve />
 
         <div className="scroll" data-scroll>
           {expanded && !listId && state.lists.length > 0 && <ListCards state={state} products={allProducts ?? []} onDialog={setDialog} />}
@@ -181,8 +184,8 @@ export function FavoritesScreen() {
         </div>
       </section>
 
-      {(selectedRef || (breakpoint === 'medium' && !shortLandscape)) &&
-        (selectedRef ? (
+      {/* Igual que el catálogo: el detalle (inspector) solo aparece con un producto elegido; sin panel vacío. */}
+      {selectedRef && (
           <ProductDetail
             product={selected}
             loading={loadingSelected}
@@ -193,11 +196,7 @@ export function FavoritesScreen() {
             onDismiss={() => setParam('ref', null)}
             onFavorite={() => setDialog({ kind: 'edit', ref: selectedRef })}
           />
-        ) : (
-          <aside className="detail" aria-label="Detalle de producto">
-            <EmptyState title="Selecciona un favorito" />
-          </aside>
-        ))}
+      )}
 
       {dialog?.kind === 'new' && <ListNameSheet listId={null} onClose={() => setDialog(null)} onCreated={(id) => setParam('lista', id)} />}
       {dialog?.kind === 'rename' && <ListNameSheet listId={dialog.id} onClose={() => setDialog(null)} />}

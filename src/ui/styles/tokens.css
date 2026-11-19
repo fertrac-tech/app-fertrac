@@ -1,30 +1,58 @@
 /* Tokens 1:1 con las variables de Figma ("Fertrac Tokens" y "Fertrac Tokens · Oscuro"). */
 :root {
   --brand-primary: #f47920;
-  --brand-primary-strong: #c85a0c;
+  --brand-primary-strong: #a84d0a; /* texto naranja: 5,6:1 sobre blanco (antes #c85a0c, 4,3:1) */
+  /* Accesibilidad (WCAG 2.2 AA): naranja para íconos (≥ 3:1) y para acciones con texto (≥ 4,5:1). */
+  --brand-ui: #e0690f;
+  --action-bg: #b4530a;
+  --action-fg: #ffffff;
   --brand-primary-soft: #fef0e6;
   --brand-gray: #58595b;
-  --bg-app: #f5f6f7;
+  --bg-app: #fbf6f2; /* Curva Fertrac: fondo cálido */
   --bg-surface: #ffffff;
   --bg-subtle: #eef0f2;
   --text-primary: #1f2328;
   --text-secondary: #5f6672;
   --text-inverse: #ffffff;
   --border-default: #dde1e6;
+  /* Marca de agua del catálogo: color e intensidad (0–1). */
+  --watermark-color: #58595b;
+  --watermark-opacity: 0.12;
+  /* Curva Fertrac: encabezado de marca (barra superior, buscador y filtros) y su curva. */
+  --header-bg: #f47920;
+  /* "Islas blancas sobre naranja": el naranja es el lienzo de marca; los controles flotan en
+     píldoras blancas y el texto directo sobre naranja va en carbón (5,7:1). */
+  --header-fg: #1f2328;
+  --header-chip-bg: #ffffff;
+  --header-chip-border: #ffffff;
+  --header-field-bg: #ffffff;
+  --header-field-border: transparent;
+  --header-field-icon: #b4530a;
+  --header-icon-bg: #ffffff;
+  --header-chip-on-bg: #1f2328;
+  --header-chip-on-fg: #ffffff;
+  --header-curve-stroke: transparent; /* claro: curva rellena, sin trazo */
+  --header-accent: #1f2328; /* estrella activa u otros acentos sobre el encabezado */
+  --radius-card: 18px;
+  /* Isla flotante: vidrio cálido de la barra lateral y el riel. */
+  --glass-bg: rgb(255 250 246 / 0.74);
+  --glass-border: rgb(255 255 255 / 0.85);
+  --glass-shadow: 0 8px 28px rgb(88 89 91 / 0.18);
+  --glass-item: rgb(255 255 255 / 0.7);
+  --glass-active: rgb(244 121 32 / 0.14);
   --state-nuevo: #ffc000;
   --state-nuevo-soft: #fff4cc;
   --state-nuevo-text: #7a5b00;
   --state-promo: #9fc5e8;
   --state-promo-soft: #e6f1fa;
   --state-promo-text: #1b5e91;
-  --stock-ok: #1e7b3c;
+  --stock-ok: #1a7136; /* 4,9:1 sobre --stock-ok-soft (antes 4,3:1) */
   --stock-ok-soft: #d4edda;
   --stock-low: #8a6100;
   --stock-low-soft: #fff3cd;
   --stock-none: #a32330;
   --stock-none-soft: #f8d7da;
   --scrim: rgb(31 35 40 / 0.7);
-  --wm-opacity: 0.14;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -38,6 +66,9 @@
 :root[data-theme='dark'] {
   --brand-primary: #f47920;
   --brand-primary-strong: #ffa45c;
+  --brand-ui: #f47920;
+  --action-bg: #f47920;
+  --action-fg: #1a0d03; /* 6,9:1 (el blanco sobre #f47920 da 2,8:1) */
   --brand-primary-soft: #3a2413;
   --bg-app: #121416;
   --bg-surface: #1c1f23;
@@ -46,6 +77,26 @@
   --text-secondary: #a3aab5;
   --text-inverse: #ffffff;
   --border-default: #343a42;
+  --watermark-color: #ffffff;
+  --watermark-opacity: 0.12;
+  /* Oscuro "Carbón con trazo naranja": encabezado del tono de las superficies; la curva es un trazo naranja. */
+  --header-bg: #1c1f23;
+  --header-fg: #eceef1;
+  --header-chip-bg: #2a2e34;
+  --header-chip-border: #3a4048;
+  --header-field-bg: #2a2e34;
+  --header-field-border: #3a4048;
+  --header-field-icon: #f47920;
+  --header-icon-bg: transparent;
+  --header-chip-on-bg: #f47920;
+  --header-chip-on-fg: #1a0d03;
+  --header-curve-stroke: #f47920;
+  --header-accent: #f47920;
+  --glass-bg: rgb(28 31 35 / 0.74);
+  --glass-border: rgb(255 255 255 / 0.08);
+  --glass-shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+  --glass-item: rgb(255 255 255 / 0.06);
+  --glass-active: rgb(244 121 32 / 0.18);
   --state-nuevo: #ffc000;
   --state-nuevo-soft: #3d3206;
   --state-nuevo-text: #ffd75a;
@@ -59,6 +110,5 @@
   --stock-none: #f28b95;
   --stock-none-soft: #3f151a;
   --scrim: rgb(0 0 0 / 0.7);
-  --wm-opacity: 0.2;
   color-scheme: dark;
 }

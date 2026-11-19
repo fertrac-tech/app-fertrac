@@ -6,9 +6,10 @@ import type { Condition } from '@/domain/product';
 import { formatCount } from '@/domain/text';
 import { EditFavoriteSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
+import { Watermark } from '../components/Watermark';
 import { EmptyState, ListSkeleton, PaginationBar, ProductCards, ProductTable } from '../components/ProductViews';
 import { MultiSelectFilter } from '../components/MultiSelectFilter';
-import { Icon } from '../components/primitives';
+import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { SyncButton, SyncStamp } from '../layout/Shell';
 
@@ -176,6 +177,7 @@ export function CatalogScreen() {
               )}
           </div>
         </div>
+        <HeaderCurve />
 
         {!expanded && (
           <div className="meta">
@@ -186,6 +188,7 @@ export function CatalogScreen() {
           </div>
         )}
 
+        <div className={`catalog__area${expanded && page && page.total > 0 ? ' catalog__area--table' : ''}`}>
         <div className={expanded ? 'catalog__list' : 'scroll'} ref={scrollRef} data-scroll={expanded ? undefined : true} style={expanded ? { minHeight: 0 } : undefined}>
           {!page ? (
             <ListSkeleton />
@@ -201,6 +204,8 @@ export function CatalogScreen() {
           ) : (
             <ProductCards {...listProps} />
           )}
+        </div>
+          <Watermark />
         </div>
 
         {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => update({ p: p > 1 ? String(p) : null })} />}

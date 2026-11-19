@@ -31,7 +31,7 @@ function AppBar() {
   return (
     <header className="appbar">
       <div className="appbar__brand">
-        <Logo height={34} />
+        <Logo variant="encabezado" height={30} />
         <span>Lista de Precios</span>
       </div>
       <div className="appbar__actions">
@@ -74,7 +74,8 @@ function Rail({ onToggle, onNewList }: { onToggle: () => void; onNewList?: () =>
         <Icon name="right" size={20} />
       </button>
       <span style={{ height: 12 }} />
-      {NAV.map((item) => (
+      {/* Perfil no va en el riel: se abre desde la foto, al pie. */}
+      {NAV.filter((item) => item.to !== '/perfil').map((item) => (
         <NavLink key={item.to} to={item.to} end={item.to === '/'}>
           <Icon name={item.icon} size={22} />
           {item.label}
@@ -88,9 +89,9 @@ function Rail({ onToggle, onNewList }: { onToggle: () => void; onNewList?: () =>
       <span className="rail__spacer" />
       <ThemeToggle />
       <SyncButton />
-      <Link to="/perfil" className="icon-btn" aria-label="Abrir perfil">
+      <NavLink to="/perfil" className="icon-btn rail__profile" aria-label="Abrir perfil">
         <Avatar name={session.user.name} picture={session.user.picture} size={36} />
-      </Link>
+      </NavLink>
     </nav>
   );
 }
@@ -108,8 +109,9 @@ function Sidebar({ onNewList, onToggle }: { onNewList: () => void; onToggle: () 
   return (
     <nav className="sidebar" aria-label="Navegación principal">
       <div className="sidebar__brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Logo height={44} />
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, whiteSpace: 'nowrap' }}>
+          {/* Isla flotante: logo naranja sin fondo, legible sobre el vidrio en claro y oscuro. */}
+          <Logo variant="mono" height={36} />
           Lista de Precios
         </span>
         <button type="button" className="icon-btn" aria-label="Recortar barra de navegación" onClick={onToggle}>

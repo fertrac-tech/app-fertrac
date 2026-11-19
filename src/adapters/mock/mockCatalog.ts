@@ -1,4 +1,10 @@
 import { promoColorLabel, type Condition, type Product } from '@/domain/product';
+// Imagen de demostración (ilustración propia, sin derechos de terceros) para probar en modo demo
+// la foto del detalle, las miniaturas, la ampliación y la descarga.
+import demoPhoto from './assets/producto-demo.jpg';
+
+/** Foto de demostración: 3 de cada 4 productos generados la llevan; el resto prueba el estado "sin foto". */
+export const DEMO_PHOTO_URL = demoPhoto;
 
 /** Catálogo de demostración determinista (mismo resultado en cada ejecución). */
 const PARTS = [
@@ -81,7 +87,7 @@ export function buildMockCatalog(size = 4732): Product[] {
         promo: condition === 'PROMO' ? Math.round((gross * 0.88) / 100) * 100 : null,
       },
       promoEnds: condition === 'PROMO' ? '30 de noviembre' : null,
-      photoUrl: null,
+      photoUrl: i % 4 === 3 ? null : DEMO_PHOTO_URL,
     });
   }
   return products;

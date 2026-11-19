@@ -1,0 +1,590 @@
+/*
+ * Diseño "Curva Fertrac" (opción 4).
+ * Capa visual sobre app.css: encabezado de marca naranja que termina en la curva del lema,
+ * formas redondeadas y fondo cálido. No cambia estructura ni comportamiento; la marca de agua
+ * (.catalog__area / .watermark) y los filtros siguen igual. Para revertir, quitar su import en main.tsx.
+ */
+
+/* ── Curva del encabezado ── */
+.hcurve {
+  display: block;
+  flex: none;
+  width: 100%;
+  height: 28px;
+  fill: var(--header-bg);
+  pointer-events: none;
+}
+.hcurve__line {
+  fill: none;
+  stroke: var(--header-curve-stroke);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+/* ── Barra superior (móvil) ── */
+.appbar {
+  height: 60px;
+  background: var(--header-bg);
+  border-bottom: 0;
+}
+.appbar__brand {
+  color: var(--header-fg);
+  font-size: 15px;
+  font-weight: 600;
+}
+.appbar .icon-btn {
+  color: var(--header-fg);
+  background: var(--header-icon-bg); /* claro: íconos en círculo blanco (isla) */
+  border-radius: var(--radius-pill);
+}
+.appbar__actions {
+  gap: 6px;
+}
+.appbar .avatar {
+  box-shadow: 0 0 0 2px var(--header-fg);
+}
+
+/* ── Encabezado del catálogo: buscador y filtros sobre naranja ── */
+.toolbar {
+  background: var(--header-bg);
+  padding-bottom: 4px;
+  /* Los chips usan margen negativo para su anillo de foco; sin recorte horizontal empujaban
+     6 px fuera de la pantalla en móvil. Los paneles de filtro son fixed: no se recortan. */
+  overflow-x: clip;
+}
+/* Escritorio: la fila del buscador también va sobre el encabezado (antes era blanca). */
+.toolbar__row--top {
+  background: transparent;
+  border-bottom: 0;
+}
+.toolbar .search {
+  height: var(--touch);
+  padding: 0 16px;
+  border-color: var(--header-field-border);
+  border-radius: var(--radius-pill);
+  background: var(--header-field-bg);
+  color: var(--header-field-icon);
+}
+.toolbar .search:focus-within {
+  border-color: var(--header-field-border);
+  box-shadow: 0 0 0 2px var(--header-fg);
+}
+.toolbar .chips .chip {
+  border-color: var(--header-chip-bg);
+  background: var(--header-chip-bg);
+  color: var(--header-fg);
+}
+.toolbar .chips .chip:focus-within,
+.toolbar .chips .chip:focus-visible {
+  outline-color: var(--header-fg);
+}
+.toolbar .chips .chip--active,
+.toolbar .chips .chip[aria-expanded='true'],
+.toolbar .chips .chip[aria-current='true'] {
+  border-color: var(--header-chip-on-bg);
+  background: var(--header-chip-on-bg);
+  color: var(--header-chip-on-fg);
+}
+.toolbar .chips .chip--clear {
+  border-color: var(--header-chip-border);
+  background: transparent;
+  color: var(--header-fg);
+}
+.toolbar .chips .chip--clear:disabled {
+  color: var(--header-fg);
+  opacity: 0.55;
+}
+.toolbar .meta--inline,
+.toolbar .meta--inline .meta__order,
+.toolbar .muted {
+  color: var(--header-fg);
+}
+.toolbar .btn--outline {
+  border-color: var(--header-field-border);
+  border-radius: var(--radius-pill);
+  background: var(--header-field-bg);
+  color: var(--brand-primary-strong);
+}
+
+/* ── Tarjetas ── */
+.card {
+  border-color: transparent;
+  border-radius: var(--radius-card);
+}
+.card[data-selected='true'] {
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary);
+}
+.thumb {
+  border-radius: 12px;
+}
+.cards {
+  gap: 10px;
+}
+
+/* ── Tabla (escritorio) ── */
+.table {
+  border-color: transparent;
+  border-radius: 22px;
+}
+.table__head {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* ── Paginación ── */
+.pagebar {
+  background: transparent;
+  border-top: 0;
+}
+.pagination button {
+  border-color: transparent;
+  border-radius: var(--radius-pill);
+  min-width: 44px;
+}
+.pagination button[aria-current='page'] {
+  border-color: var(--brand-primary);
+}
+
+/* ── Barra inferior (móvil): pestaña activa como píldora ── */
+.bottomnav {
+  height: 68px;
+  border-top: 0;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -2px 12px rgb(0 0 0 / 0.06);
+}
+.bottomnav a,
+.rail a {
+  position: relative;
+  isolation: isolate;
+}
+/* Los íconos son máscaras: la píldora va detrás, como pseudo-elemento centrado en el ícono. */
+.bottomnav a[aria-current='page']::before,
+.rail a:not(.rail__profile)[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: 56px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary-soft);
+  transform: translate(-50%, calc(-50% - 9px));
+}
+.bottomnav a[aria-current='page'],
+.rail a[aria-current='page'] {
+  color: var(--brand-primary-strong);
+}
+
+/* ── Riel y barra lateral: "Isla flotante" (Apple HIG · sidebars / Liquid Glass) ──
+   La navegación flota sobre el contenido, separada de los bordes, con vidrio cálido translúcido
+   y esquinas concéntricas. El encabezado naranja del catálogo continúa por debajo de la isla. */
+.shell {
+  position: relative;
+}
+.shell[data-breakpoint='medium'],
+.shell[data-breakpoint='expanded'] {
+  --nav-w: 72px;
+  --nav-gap: 10px;
+  --nav-inset: calc(var(--nav-w) + 2 * var(--nav-gap));
+}
+.shell[data-breakpoint='medium'][data-nav-collapsed='false'],
+.shell[data-breakpoint='expanded'][data-nav-collapsed='false'] {
+  --nav-w: 240px;
+}
+.shell > .rail,
+.shell > .sidebar {
+  position: absolute;
+  z-index: 30; /* sobre el contenido; debajo de los paneles de filtro (55), hojas y diálogos */
+  top: var(--nav-gap);
+  bottom: var(--nav-gap);
+  left: var(--nav-gap);
+  width: var(--nav-w);
+  box-sizing: border-box;
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+/* Riel fluido según el alto disponible: isotipo, botones e ítems escalan con la altura de la
+   pantalla (vh) entre un mínimo táctil y su tamaño normal. A 412 px de alto (teléfono en
+   horizontal) el isotipo queda en ~31 px y todo el riel cabe sin cortar la foto de Perfil;
+   desde ~600 px de alto recupera sus medidas normales (44 / 44 / 60 px). */
+.shell > .rail {
+  --rail-iso: clamp(28px, 7.5vh, 44px);
+  --rail-btn: clamp(36px, 10vh, 44px);
+  --rail-item: clamp(44px, 12vh, 60px);
+  gap: clamp(0px, 0.6vh, 4px);
+  padding-top: clamp(8px, 2vh, 12px);
+  padding-bottom: clamp(8px, 2vh, 12px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.shell > .rail::-webkit-scrollbar {
+  display: none;
+}
+.shell > .rail > * {
+  flex-shrink: 0;
+}
+.shell > .rail > .logo {
+  width: var(--rail-iso);
+  height: var(--rail-iso) !important; /* el componente Logo fija el alto en línea */
+}
+.shell > .rail > .icon-btn {
+  width: var(--rail-btn);
+  height: var(--rail-btn);
+}
+.shell > .rail > span:not(.rail__spacer) {
+  height: clamp(0px, 1.5vh, 12px) !important; /* separador bajo el botón de expandir */
+}
+.shell > .rail > a:not(.rail__profile) {
+  height: var(--rail-item);
+}
+/* La foto abre Perfil: botón cuadrado como los demás (antes heredaba los 60 px de alto de los ítems). */
+.shell > .rail > .rail__profile {
+  align-self: center;
+  width: var(--rail-btn);
+  height: var(--rail-btn);
+}
+.shell > .rail > .rail__profile .avatar {
+  width: calc(var(--rail-btn) - 8px) !important;
+  height: calc(var(--rail-btn) - 8px) !important;
+}
+/* Teléfono en horizontal: la isla se acerca más a los bordes para ganar alto. */
+@media (max-height: 599.98px) {
+  .shell[data-breakpoint='medium'],
+  .shell[data-breakpoint='expanded'] {
+    --nav-gap: 6px;
+  }
+}
+.shell[data-breakpoint='medium'] > .shell__main,
+.shell[data-breakpoint='expanded'] > .shell__main {
+  margin-left: var(--nav-inset);
+}
+/* El encabezado del catálogo (y su curva) se extiende por debajo de la isla hasta el borde. */
+.shell[data-breakpoint='medium'] .toolbar,
+.shell[data-breakpoint='expanded'] .toolbar {
+  margin-left: calc(-1 * var(--nav-inset));
+  padding-left: calc(var(--nav-inset) + 16px);
+}
+.shell[data-breakpoint='medium'] .toolbar + .hcurve,
+.shell[data-breakpoint='expanded'] .toolbar + .hcurve {
+  margin-left: calc(-1 * var(--nav-inset));
+  width: calc(100% + var(--nav-inset));
+}
+.navitem {
+  border-radius: 16px;
+}
+.navitem[aria-current='page'] {
+  background: var(--glass-active);
+}
+.sidebar__user {
+  border-radius: 18px;
+  background: var(--glass-item);
+}
+
+/* ── Favoritos: título, "Nueva lista" y chips de listas sobre el encabezado de marca ── */
+.toolbar--fav {
+  gap: 6px;
+  padding-top: 14px;
+}
+.toolbar--fav .pagehead,
+.toolbar--fav .fav-chips {
+  padding: 0;
+}
+.toolbar--fav .fav-chips {
+  margin: -6px;
+  padding: 6px;
+}
+.toolbar--fav .pagehead h1,
+.toolbar--fav .pagehead p {
+  color: var(--header-fg);
+}
+.toolbar--fav .pagehead p {
+  font-weight: 500;
+}
+.toolbar--fav .btn--primary {
+  border-color: var(--header-chip-on-bg);
+  background: var(--header-chip-on-bg);
+  color: var(--header-chip-on-fg);
+}
+
+/* ── Paneles, hojas y detalle ── */
+.panel {
+  border-color: transparent;
+  border-radius: 22px;
+}
+.btn {
+  border-radius: var(--radius-pill);
+}
+/* Barra del detalle y foto sobre el encabezado de marca (móvil, pantalla completa). */
+.detail__bar {
+  background: var(--header-bg);
+  color: var(--header-fg);
+}
+.detail__bar .detail__back,
+.detail__bar .icon-btn {
+  color: var(--header-fg);
+}
+.detail__bar .icon-btn--star[aria-pressed='true'] {
+  color: var(--header-accent);
+}
+.detail__hero {
+  padding: 4px 16px 6px;
+  background: var(--header-bg);
+}
+.detail__hero .detail__photo {
+  border-radius: 22px;
+  background: var(--header-field-bg); /* blanco en claro; gris elevado en oscuro */
+}
+.detail__hero + .hcurve {
+  height: 32px;
+}
+
+/* ── Detalle como "Inspector de vidrio" (Apple HIG · Panels / Inspector) ──
+   En fold, tablet y escritorio el detalle es un panel translúcido que flota a la derecha,
+   separado de los bordes, sobre el encabezado naranja y su curva (que siguen por debajo).
+   La lista reserva su espacio para no quedar tapada y la fila elegida queda resaltada. */
+.catalog {
+  position: relative;
+}
+.shell[data-breakpoint='medium'] .catalog--detail,
+.shell[data-breakpoint='expanded'] .catalog--detail {
+  --detail-gap: 10px;
+  --detail-w: clamp(320px, 30vw, 420px);
+}
+.shell[data-breakpoint='medium'] .catalog--detail {
+  --detail-w: clamp(300px, 46%, 400px);
+}
+.shell[data-breakpoint='medium'] .catalog.catalog--detail > .catalog__list,
+.shell[data-breakpoint='expanded'] .catalog.catalog--detail > .catalog__list {
+  flex: 1 1 auto;
+  max-width: none;
+}
+.shell[data-breakpoint] .catalog--detail > .catalog__list > :not(.toolbar):not(.hcurve) {
+  margin-right: calc(var(--detail-w) + var(--detail-gap));
+}
+.shell[data-breakpoint] .catalog--detail > .catalog__list > .toolbar {
+  padding-right: calc(var(--detail-w) + 2 * var(--detail-gap) + 16px);
+}
+.shell[data-breakpoint] .catalog--detail > .detail:not(.detail--overlay) {
+  position: absolute;
+  z-index: 20; /* sobre la lista; debajo de filtros (55), hojas y diálogos */
+  top: var(--detail-gap);
+  right: var(--detail-gap);
+  bottom: var(--detail-gap);
+  width: var(--detail-w);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 22px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--glass-shadow);
+}
+/* En plegables, el inspector ocupa la pantalla derecha de la bisagra. */
+@media (horizontal-viewport-segments: 2) {
+  .shell[data-breakpoint='medium'] .catalog--detail {
+    --detail-w: calc(env(viewport-segment-width 1 0) - 2 * var(--detail-gap));
+  }
+  .shell[data-breakpoint] .catalog--detail > .detail:not(.detail--overlay) {
+    margin-left: 0;
+  }
+}
+.detail:not(.detail--overlay) .detail__bar {
+  background: transparent;
+  color: var(--text-primary);
+}
+.detail:not(.detail--overlay) .detail__bar .detail__back,
+.detail:not(.detail--overlay) .detail__bar .icon-btn {
+  color: var(--text-primary);
+}
+.detail:not(.detail--overlay) .detail__bar .icon-btn--star[aria-pressed='true'] {
+  color: var(--brand-ui);
+}
+.detail:not(.detail--overlay) .detail__hero {
+  background: transparent;
+}
+.detail:not(.detail--overlay) .detail__hero .detail__photo {
+  background: var(--glass-item);
+}
+.detail:not(.detail--overlay) .detail__hero + .hcurve {
+  display: none;
+}
+/* Selección persistente en la lista (Apple HIG · Split views). */
+.row[data-selected='true'] {
+  border-radius: 12px;
+  box-shadow: inset 0 0 0 2px var(--brand-primary), inset 0 0 0 9999px rgb(244 121 32 / 0.08);
+}
+.price {
+  border-radius: 16px;
+}
+.detail__action {
+  background: transparent;
+}
+
+/* ── Perfil: portada naranja con logo blanco y curva; la foto se apoya en la curva ── */
+.profile__cover {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  background: none;
+}
+.profile__cover-band {
+  display: flex;
+  justify-content: center;
+  padding: 18px 16px 6px;
+  background: var(--header-bg);
+}
+.profile__cover .hcurve {
+  height: 40px;
+}
+.profile__cover + .avatar {
+  margin-top: -34px;
+}
+
+/* ── Accesibilidad de color (WCAG 2.2 AA · Material 3 / Apple HIG / Fluent 2) ──
+   Acciones con texto en --action-bg/--action-fg (≥ 4,5:1) e íconos de estado en --brand-ui (≥ 3:1). */
+.btn--primary {
+  border-color: var(--action-bg);
+  background: var(--action-bg);
+  color: var(--action-fg);
+}
+.pagination button[aria-current='page'] {
+  border-color: var(--action-bg);
+  background: var(--action-bg);
+  color: var(--action-fg);
+}
+.filter__box--on {
+  border-color: var(--action-bg);
+  background: var(--action-bg);
+  color: var(--action-fg);
+}
+.icon-btn--star[aria-pressed='true'] {
+  color: var(--brand-ui);
+}
+/* Barra del detalle en móvil (sobre el encabezado): íconos en círculo blanco como en la barra superior. */
+.detail--overlay .detail__bar .icon-btn {
+  background: var(--header-icon-bg);
+  border-radius: var(--radius-pill);
+}
+.detail--overlay .detail__bar .icon-btn--star {
+  width: var(--touch);
+  height: var(--touch);
+  margin: 0;
+}
+
+/* ============ Visor de foto · Isla de vidrio con ficha ============
+   Material 3 (bottom sheet en compacto, panel lateral en mediano/expandido), Apple HIG
+   (modal de medios, zoom por gesto) y Fluent 2 (foco contenido). Objetivos táctiles de 48 px. */
+.lightbox--glass {
+  display: block;
+  padding: 0;
+  background: rgb(31 35 40 / 0.5);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  --lb-sheet-w: 320px;
+  --lb-gap: 16px;
+}
+:root[data-theme='dark'] .lightbox--glass { background: rgb(8 9 11 / 0.7); }
+/* Texto secundario sobre vidrio: más opacidad en claro para sostener 4.5:1 (WCAG 1.4.3). */
+:root:not([data-theme='dark']) .lightbox--glass { --lb-sheet-bg: rgb(255 250 246 / 0.94); }
+.lightbox__stage {
+  position: absolute;
+  inset: var(--lb-gap) calc(var(--lb-sheet-w) + var(--lb-gap) * 2) var(--lb-gap) var(--lb-gap);
+  inset-block-start: calc(var(--lb-gap) + var(--safe-top));
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  touch-action: pinch-zoom;
+}
+.lightbox__stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 22px;
+  object-fit: contain;
+  background: var(--bg-surface);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.35);
+  cursor: zoom-in;
+  user-select: none;
+}
+.lightbox__stage--zoomed { display: block; overflow: auto; border-radius: 22px; }
+.lightbox__stage--zoomed img { max-width: none; max-height: none; width: 200%; border-radius: 0; cursor: zoom-out; }
+.lightbox__close {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--lb-gap) + var(--safe-top) + 8px);
+  right: calc(var(--lb-gap) + 8px);
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  background: #fff;
+  color: #1f2328;
+  box-shadow: var(--glass-shadow);
+}
+.lightbox__sheet {
+  position: absolute;
+  right: var(--lb-gap);
+  top: 50%;
+  transform: translateY(-50%);
+  width: var(--lb-sheet-w);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 16px 14px;
+  border-radius: 26px;
+  border: 1px solid var(--glass-border);
+  background: var(--lb-sheet-bg, var(--glass-bg));
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: var(--glass-shadow);
+  color: var(--text-primary, #1f2328);
+}
+.lightbox__grip { display: none; }
+.lightbox__info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lightbox--glass .lightbox__title { font-size: 16px; font-weight: 700; white-space: normal; line-height: 1.3; }
+.lightbox__ref { font-size: 13px; color: var(--text-secondary); }
+.lightbox__meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lightbox__price { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lightbox__download { min-height: 48px; border-radius: 999px; }
+.lightbox__hint { margin: 0; font-size: 12px; text-align: center; color: var(--text-secondary); }
+
+/* Compacto: foto arriba a todo el ancho y ficha como bottom sheet flotante. */
+@media (max-width: 599.98px) {
+  .lightbox--glass { --lb-gap: 10px; }
+  .lightbox__stage {
+    inset: calc(var(--lb-gap) + var(--safe-top) + 60px) var(--lb-gap) 250px var(--lb-gap);
+  }
+  .lightbox__close { top: calc(var(--lb-gap) + var(--safe-top)); right: var(--lb-gap); }
+  .lightbox__sheet {
+    top: auto;
+    transform: none;
+    left: var(--lb-gap);
+    right: var(--lb-gap);
+    bottom: calc(var(--lb-gap) + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    padding-top: 8px;
+  }
+  .lightbox__grip { display: block; width: 36px; height: 4px; margin: 0 auto 4px; border-radius: 99px; background: var(--border-strong, #c9c2bb); }
+}
+/* Horizontal bajo (teléfono girado): la ficha vuelve al costado. */
+@media (max-width: 599.98px) and (orientation: landscape), (max-height: 499.98px) {
+  .lightbox--glass { --lb-sheet-w: 260px; --lb-gap: 8px; }
+  .lightbox__stage { inset: var(--lb-gap) calc(var(--lb-sheet-w) + var(--lb-gap) * 2) var(--lb-gap) var(--lb-gap); }
+  .lightbox__sheet { top: 50%; bottom: auto; left: auto; right: var(--lb-gap); transform: translateY(-50%); width: var(--lb-sheet-w); padding-top: 14px; }
+  .lightbox__grip { display: none; }
+  .lightbox__close { top: calc(var(--lb-gap) + 4px); right: calc(var(--lb-gap) + 4px); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .lightbox__sheet { background: var(--bg-surface); }
+}

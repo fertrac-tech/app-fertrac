@@ -1,7 +1,7 @@
 import { layerStatuses } from '@/domain/access';
 import { formatSyncTime } from '@/domain/text';
 import type { Channel } from '@/ports';
-import { Avatar, Icon } from '../components/primitives';
+import { Avatar, HeaderCurve, Icon, Logo } from '../components/primitives';
 import { useContainer, useReady, useTheme, type Theme } from '../context';
 
 const CHANNEL_LABEL: Record<Channel, string> = {
@@ -26,7 +26,13 @@ export function ProfileScreen() {
   return (
     <div className="scroll">
       <div className="profile">
-        <section className="panel panel--center" aria-label="Cuenta">
+        <section className="panel panel--center profile__account" aria-label="Cuenta">
+          <div className="profile__cover">
+            <div className="profile__cover-band">
+              <Logo variant="completo-encabezado" height={56} />
+            </div>
+            <HeaderCurve />
+          </div>
           <Avatar name={user.name} picture={user.picture} size={76} />
           <small>{user.picture ? 'Foto de la cuenta de Google' : 'Tu cuenta de Google no tiene foto'}</small>
           <h1>{user.name}</h1>

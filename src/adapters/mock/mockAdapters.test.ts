@@ -3,10 +3,18 @@ import { CatalogIndex } from '@/domain/catalogQuery';
 import { priorityTier } from '@/domain/product';
 import { AccessDeniedError } from '@/ports';
 import { MockCatalogSource, readMockAccess } from './mockAdapters';
-import { buildMockCatalog } from './mockCatalog';
+import { buildMockCatalog, DEMO_PHOTO_URL } from './mockCatalog';
 
 describe('catálogo de demostración', () => {
   const catalog = buildMockCatalog();
+
+  it('trae una imagen demo en 3 de cada 4 productos generados y deja otros sin foto para probar ambos estados', () => {
+    const withPhoto = catalog.filter((p) => p.photoUrl === DEMO_PHOTO_URL).length;
+    const withoutPhoto = catalog.filter((p) => p.photoUrl === null).length;
+    expect(DEMO_PHOTO_URL).toMatch(/producto-demo.*\.jpg$/);
+    expect(withPhoto).toBeGreaterThan(catalog.length * 0.7);
+    expect(withoutPhoto).toBeGreaterThan(catalog.length * 0.2);
+  });
 
   it('es determinista, sin referencias repetidas y del tamaño del diseño', () => {
     expect(catalog).toHaveLength(4732);

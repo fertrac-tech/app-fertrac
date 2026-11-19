@@ -52,6 +52,19 @@ describe('Acceso (pantallas 01 y 02)', () => {
 });
 
 describe('Catálogo (pantalla 03)', () => {
+  it('marca de agua: cubre el área de la lista bajo búsqueda y filtros, oculta a lectores y sin bloquear clics', async () => {
+    renderApp();
+    const list = await screen.findByRole('list', { name: 'Productos' });
+    const mark = screen.getByTestId('watermark');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+    expect(mark.querySelectorAll('pattern text')).not.toHaveLength(0);
+    expect(mark.querySelector('pattern text')).toHaveTextContent('Fertrac');
+    const area = mark.parentElement!;
+    expect(area).toHaveClass('catalog__area');
+    expect(area).toContainElement(list);
+    expect(area).not.toContainElement(screen.getByRole('searchbox'));
+  });
+
   it('muestra 100 por página, en orden alfabético por Producto, con total y página visibles', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
@@ -182,7 +195,7 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     expect(within(detail).getByText('$ 391.400')).toBeInTheDocument();
     expect(within(detail).getByText('18 und disponibles')).toBeInTheDocument();
     const logos = within(detail).getAllByRole('img', { name: 'Fertrac' }).map((l) => l.getAttribute('data-logo'));
-    expect(logos).toEqual(['principal', 'mono']);
+    expect(logos).toEqual(['negativo', 'mono']); // barra sobre el encabezado naranja (claro) + junto a "Precios"
   });
 
   it('la foto se amplía en un diálogo centrado y se cierra', async () => {
@@ -195,6 +208,29 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     expect(within(dialog).getByRole('img')).toHaveAttribute('src', expect.stringContaining('sz=w1600'));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cerrar foto' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('el visor de vidrio muestra la ficha, contiene el foco, hace zoom y cierra con Atrás', async () => {
+    renderApp({ route: '/?ref=AMK-2210' });
+    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
+    await within(detail).findByRole('heading', { name: 'AMK-2210' });
+    await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
+    const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
+    expect(within(dialog).getByText('$ 412.000')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /Descargar foto/ })).toBeInTheDocument();
+    // Foco contenido: varias tabulaciones no salen del diálogo.
+    for (let i = 0; i < 5; i += 1) await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    // Tocar la foto ya no cierra: doble clic alterna el zoom.
+    const img = within(dialog).getByRole('img');
+    await userEvent.click(img);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await userEvent.dblClick(img);
+    expect(within(dialog).getByText('Doble toque para alejar')).toBeInTheDocument();
+    // "Atrás" del sistema cierra el visor y conserva el detalle.
+    window.history.back();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(window.location.search).toContain('ref=AMK-2210');
   });
 
   it('en móvil el detalle vuelve a la lista conservando la página', async () => {
@@ -234,6 +270,18 @@ describe('Responsive (compacto · fold abierto · escritorio)', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Cerrar detalle' }));
     await waitFor(() => expect(catalogEl()).not.toHaveClass('catalog--detail'));
+  });
+
+  it('riel: sin botón "Perfil"; la foto al pie abre el perfil y queda marcada', async () => {
+    renderApp({ viewport: 'medium' });
+    await screen.findByRole('list', { name: 'Productos' });
+    const rail = screen.getByRole('navigation', { name: 'Navegación principal' });
+    expect(within(rail).queryByRole('link', { name: 'Perfil' })).not.toBeInTheDocument();
+    expect(within(rail).getByRole('link', { name: 'Catálogo' })).toBeInTheDocument();
+    expect(within(rail).getByRole('link', { name: 'Favoritos' })).toBeInTheDocument();
+    await userEvent.click(within(rail).getByRole('link', { name: 'Abrir perfil' }));
+    expect(await screen.findByRole('heading', { name: 'David Torres' })).toBeInTheDocument();
+    expect(within(rail).getByRole('link', { name: 'Abrir perfil' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('teléfono en horizontal (932×430): sin panel de detalle vacío; al elegir un producto se abre a un lado', async () => {
@@ -351,6 +399,15 @@ describe('Favoritos (pantallas 05 y 06)', () => {
 });
 
 describe('Perfil (pantalla 07)', () => {
+  it('portada de marca: logo completo de Fertrac en la banda superior de la tarjeta, seguido de la foto', async () => {
+    renderApp({ route: '/perfil' });
+    await screen.findByRole('heading', { name: 'David Torres' });
+    const logo = document.querySelector('.profile section[aria-label="Cuenta"] > .profile__cover:first-child img');
+    expect(logo).toHaveAttribute('alt', 'Fertrac');
+    expect(logo).toHaveAttribute('data-logo', 'completo-blanco'); // tema claro por defecto
+    expect(document.querySelector('.profile__cover + .avatar')).not.toBeNull();
+  });
+
   it('muestra la foto designada en Google, nombre, correo y las tres capas', async () => {
     renderApp({ route: '/perfil', user: { picture: 'https://lh3.googleusercontent.com/a/foto' } });
     expect(await screen.findByRole('heading', { name: 'David Torres' })).toBeInTheDocument();
@@ -379,13 +436,15 @@ describe('Perfil (pantalla 07)', () => {
     expect(screen.getByRole('button', { name: 'Claro' })).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('el botón de tema cambia a oscuro y de vuelta a voluntad, y usa el logo blanco negativo', async () => {
+  it('el botón de tema cambia a oscuro y de vuelta; el logo del encabezado es blanco en claro y en color en oscuro (Carbón)', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
+    const headerLogo = () => document.querySelector('.appbar .logo');
+    expect(headerLogo()).toHaveAttribute('src', expect.stringContaining('logo2'));
     await userEvent.click(screen.getByRole('button', { name: 'Cambiar a modo oscuro' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(window.localStorage.getItem('fertrac_v2_theme')).toBe('dark');
-    expect(screen.getAllByRole('img', { name: 'Fertrac' })[0]).toHaveAttribute('src', expect.stringContaining('logo2'));
+    expect(headerLogo()).toHaveAttribute('src', expect.stringContaining('logo3'));
     await userEvent.click(screen.getByRole('button', { name: 'Cambiar a modo claro' }));
     expect(document.documentElement.dataset.theme).toBe('light');
   });

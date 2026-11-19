@@ -3,6 +3,8 @@ import isotipo from '@/assets/brand/isotipo.png';
 import logoPrincipal from '@/assets/brand/logo.png';
 import logoNegativo from '@/assets/brand/logo2.png';
 import logoMono from '@/assets/brand/logo3.png';
+import logoCompleto from '@/assets/brand/logo-fertrac.png';
+import logoCompletoBlanco from '@/assets/brand/logo-fertrac-blanco.png';
 import { conditionLabel, stockLevel, type Product } from '@/domain/product';
 import { initials } from '@/domain/text';
 import { useTheme } from '../context';
@@ -20,17 +22,44 @@ export function Icon({ name, size = 20, className = '' }: { name: IconName; size
   return <span aria-hidden="true" data-icon={name} className={`icon ${className}`} style={style} />;
 }
 
-type LogoVariant = 'principal' | 'mono' | 'isotipo';
+type LogoVariant = 'principal' | 'mono' | 'isotipo' | 'completo' | 'completo-blanco' | 'negativo' | 'encabezado' | 'completo-encabezado';
 
 /**
  * Logos autorizados (sin recolorear ni deformar).
  * `logo.png` tiene fondo blanco opaco: en modo oscuro se usa el blanco negativo.
+ * `completo` (logo con lema "Siempre Calidad Original") es naranja sobre transparente: sirve en ambos temas.
  */
-export function Logo({ variant = 'principal', height = 34 }: { variant?: LogoVariant; height?: number }) {
+export function Logo({ variant: requested = 'principal', height = 34 }: { variant?: LogoVariant; height?: number }) {
   const { theme } = useTheme();
+  let variant = requested;
+  // Sobre el encabezado de marca: blanco en claro (fondo naranja); en color en oscuro (fondo carbón).
+  if (variant === 'encabezado') variant = theme === 'dark' ? 'mono' : 'negativo';
+  if (variant === 'completo-encabezado') variant = theme === 'dark' ? 'completo' : 'completo-blanco';
   const src =
-    variant === 'isotipo' ? isotipo : variant === 'mono' ? logoMono : theme === 'dark' ? logoNegativo : logoPrincipal;
+    variant === 'completo'
+      ? logoCompleto
+      : variant === 'completo-blanco'
+        ? logoCompletoBlanco
+      : variant === 'negativo'
+        ? logoNegativo
+      : variant === 'isotipo'
+        ? isotipo
+        : variant === 'mono' ? logoMono : theme === 'dark' ? logoNegativo : logoPrincipal;
   return <img className="logo" src={src} alt="Fertrac" data-logo={variant} style={{ height, width: 'auto' }} />;
+}
+
+/**
+ * Curva Fertrac: borde ondulado inferior del encabezado de marca (toma la curva del lema
+ * "Siempre Calidad Original"). Decorativa; relleno --header-bg y trazo --header-curve-stroke
+ * (en oscuro, la curva se dibuja como línea naranja).
+ */
+export function HeaderCurve({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`hcurve ${className}`} aria-hidden="true" focusable="false" viewBox="0 0 390 28" preserveAspectRatio="none">
+      <path d="M0 0 H390 V10 C 300 34, 200 30, 120 16 C 70 8, 30 10, 0 18 Z" />
+      <path className="hcurve__line" d="M390 10 C 300 34, 200 30, 120 16 C 70 8, 30 10, 0 18" />
+    </svg>
+  );
 }
 
 export function Avatar({ name, picture, size = 32 }: { name: string; picture: string | null; size?: number }) {
