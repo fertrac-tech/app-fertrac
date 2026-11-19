@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { withThumbSize } from '@/domain/photo';
+import { downloadUrl, withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
@@ -51,10 +51,13 @@ const IMAGE_EXTENSION: Record<string, string> = {
   'image/svg+xml': 'svg',
 };
 
-/** Descarga la foto con su nombre de archivo; si el origen no permite CORS, la abre aparte. */
-async function downloadImage(src: string, fileName: string) {
+/**
+ * Descarga la foto al dispositivo con su nombre de archivo (nunca abre Drive ni otra pestaña).
+ * Devuelve false si no se pudo, para avisar en pantalla.
+ */
+async function downloadImage(src: string, fileName: string): Promise<boolean> {
   try {
-    const response = await fetch(src, { mode: 'cors', credentials: 'omit' });
+    const response = await fetch(downloadUrl(src), { mode: 'cors', credentials: 'omit', referrerPolicy: 'no-referrer' });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const blob = await response.blob();
     const mime = blob.type.split(';')[0] ?? '';
@@ -67,8 +70,9 @@ async function downloadImage(src: string, fileName: string) {
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(href), 1000);
+    return true;
   } catch {
-    window.open(src, '_blank', 'noopener,noreferrer');
+    return false;
   }
 }
 
@@ -87,6 +91,11 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
   const closeRef = useRef<HTMLButtonElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [zoomed, setZoomed] = useState(false);
+  const [download, setDownload] = useState<'idle' | 'loading' | 'error'>('idle');
+  const onDownload = async () => {
+    setDownload('loading');
+    setDownload((await downloadImage(src, fileName)) ? 'idle' : 'error');
+  };
   const closeRefFn = useRef(onClose);
   closeRefFn.current = onClose;
 
@@ -163,9 +172,17 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
           <span className="lightbox__price">{formatPrice(product.prices.gross)}</span>
           <StockPill stock={product.stock} />
         </div>
-        <button type="button" className="btn btn--primary btn--block lightbox__download" onClick={() => void downloadImage(src, fileName)}>
-          <Icon name="download" size={18} /> Descargar foto
+        <button
+          type="button"
+          className="btn btn--primary btn--block lightbox__download"
+          disabled={download === 'loading'}
+          onClick={() => void onDownload()}
+        >
+          <Icon name="download" size={18} /> {download === 'loading' ? 'Descargando…' : 'Descargar foto'}
         </button>
+        {download === 'error' && (
+          <p className="lightbox__hint lightbox__hint--error" role="alert">No se pudo descargar la foto. Intenta de nuevo.</p>
+        )}
         <p className="lightbox__hint">{zoomed ? 'Doble toque para alejar' : 'Doble toque para acercar'}</p>
       </aside>
     </div>,

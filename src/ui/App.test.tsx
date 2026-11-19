@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderApp } from '@/test/harness';
 
 const cards = () => within(screen.getByRole('list', { name: 'Productos' })).getAllByRole('article');
@@ -224,7 +224,15 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
     const dialog = screen.getByRole('dialog', { name: 'Foto de AMORTIGUADOR CABINA T800' });
     expect(within(dialog).getByText('$ 412.000')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /Descargar foto/ })).toBeInTheDocument();
+    // Descargar nunca abre Drive: pide la imagen a lh3 (con CORS) y, si falla, avisa en el visor.
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await userEvent.click(within(dialog).getByRole('button', { name: /Descargar foto/ }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('No se pudo descargar la foto');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(/^https:\/\/lh3\.googleusercontent\.com\/d\/demo-amk-2210=w\d+$/);
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+    fetchMock.mockRestore();
     // Foco contenido: varias tabulaciones no salen del diálogo.
     for (let i = 0; i < 5; i += 1) await userEvent.tab();
     expect(dialog.contains(document.activeElement)).toBe(true);

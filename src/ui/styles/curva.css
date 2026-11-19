@@ -558,6 +558,7 @@
 .lightbox__price { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .lightbox__download { min-height: 48px; border-radius: 999px; }
 .lightbox__hint { margin: 0; font-size: 12px; text-align: center; color: var(--text-secondary); }
+.lightbox__hint--error { color: var(--stock-none); font-weight: 600; }
 
 /* Compacto: foto arriba a todo el ancho y ficha como bottom sheet flotante. */
 @media (max-width: 599.98px) {
