@@ -14,7 +14,7 @@ const iconUrls = import.meta.glob<string>('../../assets/icons/*.svg', { eager: t
 export type IconName =
   | 'list' | 'star' | 'user' | 'left' | 'right' | 'refresh' | 'search' | 'filter' | 'down' | 'image'
   | 'fav-on' | 'fav-off' | 'close' | 'plus' | 'pencil' | 'trash' | 'folder' | 'logout' | 'shield'
-  | 'lock' | 'phone' | 'check' | 'block' | 'offline' | 'sun' | 'moon' | 'download';
+  | 'lock' | 'phone' | 'check' | 'block' | 'offline' | 'sun' | 'moon' | 'download' | 'share';
 
 export function Icon({ name, size = 20, className = '' }: { name: IconName; size?: number; className?: string }) {
   const url = iconUrls[`../../assets/icons/${name}.svg`] ?? '';

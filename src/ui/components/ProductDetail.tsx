@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { preparePhoto, shareOnWhatsApp } from '@/adapters/device/whatsappShare';
 import { downloadUrl, withThumbSize } from '@/domain/photo';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
@@ -196,7 +197,34 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
  */
 export function ProductDetail({ product, loading, alias, favorite, dismiss, onDismiss, onFavorite, overlay }: Props) {
   const [zoom, setZoom] = useState(false);
-  useEffect(() => setZoom(false), [product?.ref]);
+  const [share, setShare] = useState<{ busy: boolean; notice: string | null }>({ busy: false, notice: null });
+  // Foto para compartir, preparada al abrir el detalle (undefined = aún descargando).
+  const sharePhoto = useRef<{ ref: string; file: File | null | undefined }>({ ref: '', file: undefined });
+  useEffect(() => {
+    setZoom(false);
+    setShare({ busy: false, notice: null });
+    if (!product) return;
+    const slot = { ref: product.ref, file: undefined as File | null | undefined };
+    sharePhoto.current = slot;
+    void preparePhoto(product).then((file) => {
+      slot.file = file;
+    });
+  }, [product?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+  const onShare = async () => {
+    if (!product) return;
+    setShare({ busy: true, notice: null });
+    const ready = sharePhoto.current.ref === product.ref ? sharePhoto.current.file : undefined;
+    const result = await shareOnWhatsApp(product, alias, undefined, ready);
+    const notice =
+      result.status !== 'opened'
+        ? null
+        : result.photoCopied
+          ? 'Foto copiada: pégala en el chat de WhatsApp (Ctrl+V).'
+          : product.photoUrl
+            ? 'No se pudo adjuntar la foto; se compartió sin foto.'
+            : 'Producto sin foto; se compartió sin foto.';
+    setShare({ busy: false, notice });
+  };
   return (
     <aside className={`detail ${overlay ? 'detail--overlay' : ''}`} aria-label="Detalle de producto">
       <header className="detail__bar">
@@ -301,9 +329,21 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
             />
           )}
           <div className="detail__action">
-            <button type="button" className="btn btn--primary btn--block" onClick={onFavorite}>
-              <Icon name="star" size={18} /> {favorite ? 'Editar favorito' : 'Guardar en favoritos'}
-            </button>
+            {share.notice && <p className="detail__notice" role="status">{share.notice}</p>}
+            <div className="detail__buttons">
+              <button
+                type="button"
+                className="btn btn--outline btn--block"
+                aria-label="Compartir por WhatsApp"
+                disabled={share.busy}
+                onClick={() => void onShare()}
+              >
+                <Icon name="share" size={18} /> {share.busy ? 'Preparando…' : 'WhatsApp'}
+              </button>
+              <button type="button" className="btn btn--primary btn--block" onClick={onFavorite}>
+                <Icon name="star" size={18} /> {favorite ? 'Editar favorito' : 'Guardar en favoritos'}
+              </button>
+            </div>
           </div>
         </>
       )}

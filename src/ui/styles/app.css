@@ -1498,6 +1498,25 @@ p {
   padding: 12px 16px; /* el área segura inferior la reservan #root y .detail--overlay */
   background: var(--bg-surface);
 }
+.detail__buttons {
+  display: flex;
+  gap: 8px;
+}
+.detail__buttons .btn--outline {
+  flex: 0 0 auto;
+  width: auto;
+  padding-inline: 16px;
+}
+.detail__buttons .btn--primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.detail__notice {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
 
 /* ───────── Favoritos (05 · 06) ───────── */
 .pagehead {

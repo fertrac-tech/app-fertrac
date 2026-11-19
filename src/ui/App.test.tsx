@@ -205,6 +205,23 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     expect(logos).toEqual(['negativo', 'mono']); // barra sobre el encabezado naranja (claro) + junto a "Precios"
   });
 
+  it('comparte por WhatsApp: abre wa.me con producto y precio y avisa que la foto quedó copiada', async () => {
+    renderApp({ route: '/?ref=AMK-2210' });
+    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
+    await within(detail).findByRole('heading', { name: 'AMK-2210' });
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await userEvent.click(within(detail).getByRole('button', { name: 'Compartir por WhatsApp' }));
+    await waitFor(() => expect(open).toHaveBeenCalledOnce());
+    const url = decodeURIComponent(String(open.mock.calls[0]?.[0]));
+    expect(url).toContain('*AMORTIGUADOR CABINA T800*');
+    expect(url).toContain('Precio: $ 412.000');
+    expect(url).not.toContain('391.400'); // los netos no se comparten
+    expect(await within(detail).findByRole('status')).toHaveTextContent('sin foto');
+    open.mockRestore();
+    fetchMock.mockRestore();
+  });
+
   it('la foto se amplía en un diálogo centrado y se cierra', async () => {
     const { container } = renderApp({ route: '/?ref=AMK-2210' });
     const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
