@@ -9,3 +9,8 @@ keystore.properties
 # IDE (Android Studio)
 .idea/
 *.iml
+# Archify: artefactos de validacion
+*.finalize.json
+*.finalize-summary.json
+*.browser-check.json
+*.delivery.json

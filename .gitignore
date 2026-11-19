@@ -9,6 +9,7 @@ coverage
 # Artefactos y archivos generados
 .src-sync.tgz
 *.tgz
+.archify/
 # App Android (Capacitor): dependencias y salida de build
 app-android/node_modules/
 app-android/android/.gradle/
