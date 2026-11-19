@@ -645,3 +645,12 @@
   background: #25d366;
   color: #fff;
 }
+
+/* ============ Detalle · Marca de agua en precios y ficha (opción 2) ============
+   Mismo microtexto del catálogo; cubre solo .detail__content (stock, nombre, precios y ficha). */
+.detail__content {
+  position: relative;
+}
+.detail__content > .watermark {
+  border-radius: 0;
+}

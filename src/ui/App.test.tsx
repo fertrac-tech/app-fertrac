@@ -222,6 +222,19 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     fetchMock.mockRestore();
   });
 
+  it('marca de agua del detalle: cubre precios y ficha, no la foto ni la barra de acciones', async () => {
+    renderApp({ route: '/?ref=AMK-2210' });
+    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
+    await within(detail).findByRole('heading', { name: 'AMK-2210' });
+    const mark = within(detail).getByTestId('watermark');
+    expect(mark).toHaveAttribute('aria-hidden', 'true');
+    const area = mark.parentElement!;
+    expect(area).toHaveClass('detail__content');
+    expect(area).toContainElement(within(detail).getByText('$ 412.000'));
+    expect(area).not.toContainElement(within(detail).getByRole('button', { name: 'Ampliar foto' }));
+    expect(area).not.toContainElement(within(detail).getByRole('toolbar', { name: 'Acciones del producto' }));
+  });
+
   it('el dock de vidrio ofrece WhatsApp, Copiar y Foto; Favoritos queda solo en la estrella', async () => {
     renderApp({ route: '/?ref=AMK-2210' });
     const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });

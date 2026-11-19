@@ -7,6 +7,7 @@ import { shareText } from '@/domain/share';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
+import { Watermark } from './Watermark';
 
 interface Props {
   product: Product | undefined;
@@ -281,6 +282,8 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
             </div>
             <HeaderCurve />
             <div className="detail__content">
+              {/* Marca de agua solo sobre precios y ficha (opción 2): foto y encabezado quedan limpios. */}
+              <Watermark />
               <div className="detail__pills">
                 <ConditionPill condition={product.condition} promoColor={product.promoColor} large />
                 <StockPill stock={product.stock} long large />
