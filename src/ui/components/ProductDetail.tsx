@@ -175,8 +175,8 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
       <aside className="lightbox__sheet" aria-labelledby={titleId}>
         <span className="lightbox__grip" aria-hidden="true" />
         <div className="lightbox__info">
-          <strong id={titleId} className="lightbox__title">{product.name}</strong>
           <span className="lightbox__ref">{[product.ref, product.brand].filter(Boolean).join(' · ')}</span>
+          <strong id={titleId} className="lightbox__title">{product.name}</strong>
         </div>
         <div className="lightbox__meta">
           <span className="lightbox__price">{formatPrice(product.prices.gross)}</span>
