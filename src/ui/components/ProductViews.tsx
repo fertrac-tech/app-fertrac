@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { pageWindow, type PageInfo } from '@/domain/pagination';
 import { conditionLabel, priorityTier, type Product } from '@/domain/product';
 import { formatCount, formatPrice } from '@/domain/text';
@@ -18,17 +18,20 @@ interface ListProps {
   onFavorite: (ref: string) => void;
 }
 
+/** Aparición escalonada (motion.css): solo los primeros 12 elementos, para no retrasar la lista. */
+const stagger = (index: number): CSSProperties | undefined => (index < 12 ? ({ '--i': index } as CSSProperties) : undefined);
+
 const favLabel = (active: boolean, name: string) => (active ? `Editar favorito ${name}` : `Agregar ${name} a favoritos`);
 
 /** Card producto (móvil / fold) — 4 niveles de prioridad. */
 export function ProductCards({ items, selectedRef, isFavorite, onOpen, onFavorite }: ListProps) {
   return (
     <ul className="cards" aria-label="Productos">
-      {items.map(({ product, alias }) => {
+      {items.map(({ product, alias }, index) => {
         const favorite = isFavorite(product.ref);
         return (
-          <li key={product.ref}>
-            <article className="card" data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
+          <li key={product.ref} style={stagger(index)}>
+            <article className="card" data-ref={product.ref} data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
               <span className="card__accent" />
               <div className="card__body">
                 <button type="button" className="card__open" onClick={() => onOpen(product.ref)}>
@@ -74,11 +77,11 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
         <span role="columnheader" aria-label="Favorito">★</span>
       </div>
       <div className="table__body" role="rowgroup" data-scroll>
-        {items.map(({ product, alias }) => {
+        {items.map(({ product, alias }, index) => {
           const favorite = isFavorite(product.ref);
           const condition = conditionLabel(product);
           return (
-            <div className="row" role="row" key={product.ref} data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
+            <div className="row" role="row" key={product.ref} style={stagger(index)} data-ref={product.ref} data-tier={priorityTier(product)} data-color={product.condition === 'PROMO' ? product.promoColor ?? undefined : undefined} data-selected={selectedRef === product.ref}>
               <span role="cell"><Thumb url={product.photoUrl} /></span>
               <span role="cell" className="row__ref">{product.ref}</span>
               <span role="cell" className="row__brand col-brand">{product.brand}</span>

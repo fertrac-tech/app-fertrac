@@ -8,6 +8,7 @@ import { ProductDetail } from '../components/ProductDetail';
 import { EmptyState, ListSkeleton, ProductCards, ProductTable, type ProductItem } from '../components/ProductViews';
 import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
+import { closeWithTransform, openWithTransform } from '../motion/viewTransition';
 
 type Dialog = { kind: 'new' } | { kind: 'rename'; id: string } | { kind: 'delete'; id: string } | { kind: 'edit'; ref: string } | null;
 
@@ -101,7 +102,7 @@ export function FavoritesScreen() {
     items,
     selectedRef,
     isFavorite: () => true,
-    onOpen: (ref: string) => setParam('ref', ref),
+    onOpen: (ref: string) => openWithTransform(null, ref, () => setParam('ref', ref)),
     onFavorite: (ref: string) => setDialog({ kind: 'edit', ref }),
   };
   const editingProduct = dialog?.kind === 'edit' ? allProducts?.find((p) => p.ref === dialog.ref) ?? selected : undefined;
@@ -193,7 +194,7 @@ export function FavoritesScreen() {
             favorite={selectedRef in state.favorites}
             dismiss={breakpoint === 'compact' ? 'back' : 'close'}
             overlay={breakpoint === 'compact'}
-            onDismiss={() => setParam('ref', null)}
+            onDismiss={() => closeWithTransform(selectedRef, () => setParam('ref', null))}
             onFavorite={() => setDialog({ kind: 'edit', ref: selectedRef })}
           />
       )}

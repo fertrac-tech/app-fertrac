@@ -1,0 +1,402 @@
+/*
+ * Capa de movimiento (motion) — Lista de Precios Fertrac v2.
+ * Para revertir: quitar el import de este archivo en main.tsx.
+ *
+ * Referencias:
+ * - Fluent 2 · Timing and easing: 83 / 167 / 250 ms; entrar cubic-bezier(0,0,0,1), salir cubic-bezier(1,0,1,1).
+ * - Material 3 · Easing and duration: curva "emphasized" para lo que se mueve dentro de la pantalla;
+ *   patrón Container transform (fila/tarjeta → detalle) implementado con View Transitions (ui/motion/viewTransition.ts).
+ * - Apple HIG · Motion: con "Reducir movimiento" se elimina el desplazamiento y queda solo un fundido.
+ * Regla de rendimiento: solo se anima transform y opacity (el vidrio con backdrop-filter ya es costoso en WebView).
+ */
+
+:root {
+  /* Duraciones (Fluent 2 + una larga para el Container transform de M3) */
+  --motion-faster: 83ms;   /* pulsación, cambios de estado mínimos */
+  --motion-fast: 167ms;    /* hover, chips, paneles pequeños */
+  --motion-normal: 250ms;  /* hojas, entradas de componentes */
+  --motion-slow: 400ms;    /* fila/tarjeta → detalle */
+
+  /* Curvas */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);       /* M3 standard: cambios de estado */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);     /* M3 emphasized (aprox. cúbica): movimiento en pantalla */
+  --ease-enter: cubic-bezier(0, 0, 0, 1);            /* Fluent "fast out, slow in": lo que entra */
+  --ease-exit: cubic-bezier(1, 0, 1, 1);             /* Fluent "slow out, fast in": lo que sale */
+
+  --press-scale: 0.97;
+}
+
+/* ---------- 1. Respuesta inmediata en controles ---------- */
+.btn,
+.chip,
+.icon-btn,
+.navitem,
+.dock__item,
+.pagination button,
+.filter__opt,
+.card__open,
+.row__open {
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-faster) var(--ease-standard);
+}
+
+/* Pulsación: la píldora cede un poco bajo el dedo (feedback táctil visual). */
+.btn:active:not(:disabled),
+.chip:active,
+.icon-btn:active:not(:disabled),
+.dock__item:active:not(:disabled),
+.pagination button:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+/* Tarjetas y filas: resaltado suave al pasar y al quedar elegidas. */
+.card,
+.row {
+  transition: background-color var(--motion-fast) var(--ease-standard), box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+/* Estrella de favorito: pequeño rebote solo cuando el usuario la marca (data-pop lo pone FavButton). */
+.icon-btn--star[data-pop] .icon {
+  animation: motion-star-pop var(--motion-normal) var(--ease-emphasized);
+}
+@keyframes motion-star-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* Casilla del filtro al marcar. */
+.filter__box {
+  transition: background-color var(--motion-faster) var(--ease-standard), border-color var(--motion-faster) var(--ease-standard);
+}
+
+/* ---------- 2. Entradas de superficies (Fade de M3 + curva de entrada de Fluent) ---------- */
+/* Panel de filtro: aparece desde su chip. */
+.filter__pop {
+  transform-origin: top center;
+  animation: motion-pop-in var(--motion-fast) var(--ease-enter);
+}
+@keyframes motion-pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+}
+
+/* Hojas (editar favorito, nueva lista): fondo funde y la hoja sube. */
+.sheet-backdrop {
+  animation: motion-fade-in var(--motion-normal) var(--ease-standard);
+}
+.sheet {
+  animation: motion-sheet-in var(--motion-normal) var(--ease-enter);
+}
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+}
+@keyframes motion-sheet-in {
+  from { opacity: 0; transform: translateY(24px); }
+}
+
+/* Foto ampliada. */
+.lightbox {
+  animation: motion-fade-in var(--motion-normal) var(--ease-standard);
+}
+
+/* ---------- 3. Detalle de producto (opción D: la foto viaja + inspector lateral / profundidad en móvil) ---------- */
+/* Los nombres `foto` e `inspector` y <html data-vt="detalle-abre|detalle-cierra|detalle-cambia"> los asigna
+   ui/motion/viewTransition.ts solo durante la transición. */
+
+/* La foto viaja (Fluent 2 · Connected animation): de la miniatura a la foto del detalle y de regreso.
+   object-fit: cover evita que la foto se estire al pasar de cuadrada (40 px) a panorámica. */
+::view-transition-group(foto) {
+  z-index: 5; /* sobre el panel que entra */
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--ease-emphasized);
+}
+::view-transition-old(foto),
+::view-transition-new(foto) {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  animation-duration: var(--motion-slow);
+  animation-timing-function: var(--ease-standard);
+}
+
+/* Fold y escritorio: el Inspector de vidrio entra y sale por el borde derecho
+   (Apple HIG · Split views / inspector; Material 3 · Side sheet). */
+html[data-vt='detalle-abre']::view-transition-new(inspector) {
+  animation: motion-inspector-in 320ms var(--ease-enter) both;
+}
+html[data-vt='detalle-cierra']::view-transition-old(inspector) {
+  animation: motion-inspector-out 200ms var(--ease-exit) both;
+}
+@keyframes motion-inspector-in {
+  from { opacity: 0; transform: translateX(40px); }
+}
+@keyframes motion-inspector-out {
+  to { opacity: 0; transform: translateX(40px); }
+}
+
+/* Dentro del panel, el contenido llega escalonado detrás de la foto (todo termina en ~400 ms). */
+html[data-vt='detalle-abre'] .detail__content > :not(.watermark),
+html[data-vt='detalle-abre'] .detail__action {
+  animation: motion-item-in 170ms var(--ease-enter) both;
+}
+html[data-vt='detalle-abre'] .detail__content > :nth-child(2) { animation-delay: 90ms; }
+html[data-vt='detalle-abre'] .detail__content > :nth-child(3) { animation-delay: 120ms; }
+html[data-vt='detalle-abre'] .detail__content > :nth-child(4) { animation-delay: 150ms; }
+html[data-vt='detalle-abre'] .detail__content > :nth-child(5) { animation-delay: 180ms; }
+html[data-vt='detalle-abre'] .detail__content > :nth-child(n + 6) { animation-delay: 210ms; }
+html[data-vt='detalle-abre'] .detail__action { animation-delay: 230ms; }
+
+/* Móvil: el detalle (pantalla completa) avanza en profundidad y la lista retrocede (Material 3 · Shared axis Z). */
+@media (max-width: 599px) {
+  html[data-vt='detalle-abre']::view-transition-new(inspector) {
+    animation: motion-depth-in 300ms var(--ease-enter) both;
+  }
+  html[data-vt='detalle-cierra']::view-transition-old(inspector) {
+    animation: motion-depth-out 200ms var(--ease-exit) both;
+  }
+  html[data-vt='detalle-abre']::view-transition-old(root) {
+    animation: motion-recede 300ms var(--ease-standard) both;
+  }
+  html[data-vt='detalle-cierra']::view-transition-new(root) {
+    animation: motion-advance 300ms var(--ease-enter) both;
+  }
+}
+@keyframes motion-depth-in {
+  from { opacity: 0; transform: scale(0.92); }
+}
+@keyframes motion-depth-out {
+  to { opacity: 0; transform: scale(0.92); }
+}
+@keyframes motion-recede {
+  to { opacity: 0.6; transform: scale(0.97); }
+}
+@keyframes motion-advance {
+  from { opacity: 0.6; transform: scale(0.97); }
+}
+
+/* Cambiar de producto con el detalle abierto: el panel se queda y su contenido hace Fade through. */
+::view-transition-group(inspector) {
+  animation-duration: var(--motion-normal);
+}
+html[data-vt='detalle-cambia']::view-transition-old(inspector) {
+  animation: motion-fade-out 90ms var(--ease-exit) both;
+}
+html[data-vt='detalle-cambia']::view-transition-new(inspector) {
+  animation: motion-fade-through-in 210ms var(--ease-enter) 90ms both;
+}
+
+/* El resto de la pantalla (la lista que se acomoda) solo funde, rápido. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--motion-fast);
+}
+
+/* ---------- 4. Opción 3 · Navegación con dirección (Material 3) ---------- */
+/* Fade through entre destinos principales: sale rápido, entra con un leve acercamiento.
+   Solo la pantalla (no la barra inferior, el riel ni la barra superior) participa. */
+html[data-vt='tabs'] .shell__main > :not(.appbar, .bottomnav, .banner) {
+  view-transition-name: vista;
+}
+::view-transition-group(vista) {
+  animation-duration: 300ms;
+  animation-timing-function: var(--ease-standard);
+}
+::view-transition-old(vista) {
+  animation: motion-fade-out 90ms var(--ease-exit) both;
+}
+::view-transition-new(vista) {
+  animation: motion-fade-through-in 210ms var(--ease-enter) 90ms both;
+}
+@keyframes motion-fade-out {
+  to { opacity: 0; }
+}
+@keyframes motion-fade-through-in {
+  from { opacity: 0; transform: scale(0.96); }
+}
+
+/* La isla de navegación siempre por encima. Durante una transición la pantalla se pinta en una capa temporal
+   sobre todo el documento, y el encabezado naranja (que continúa por debajo de la isla) la tapaba.
+   La isla se captura como capa propia, por encima de las demás y sin fundido (no cambia entre pantallas). */
+html[data-vt] .navisland {
+  view-transition-name: navegacion;
+}
+::view-transition-group(navegacion) {
+  z-index: 10;
+  animation: none;
+}
+::view-transition-old(navegacion) {
+  display: none;
+}
+::view-transition-new(navegacion) {
+  animation: none;
+}
+
+/* Shared axis X en la paginación: la lista se desliza según la dirección (siguiente → desde la derecha). */
+html[data-vt^='axis'] .catalog__area {
+  view-transition-name: lista;
+}
+::view-transition-group(lista) {
+  animation-duration: 300ms;
+}
+html[data-vt='axis-next']::view-transition-old(lista) { animation: motion-axis-out-left 120ms var(--ease-exit) both; }
+html[data-vt='axis-next']::view-transition-new(lista) { animation: motion-axis-in-right 250ms var(--ease-enter) 60ms both; }
+html[data-vt='axis-prev']::view-transition-old(lista) { animation: motion-axis-out-right 120ms var(--ease-exit) both; }
+html[data-vt='axis-prev']::view-transition-new(lista) { animation: motion-axis-in-left 250ms var(--ease-enter) 60ms both; }
+@keyframes motion-axis-out-left { to { opacity: 0; transform: translateX(-30px); } }
+@keyframes motion-axis-out-right { to { opacity: 0; transform: translateX(30px); } }
+@keyframes motion-axis-in-right { from { opacity: 0; transform: translateX(30px); } }
+@keyframes motion-axis-in-left { from { opacity: 0; transform: translateX(-30px); } }
+
+/* Durante una transición de pantalla o de página, la aparición escalonada no se suma al movimiento. */
+html[data-vt] .cards > li,
+html[data-vt] .row {
+  animation: none;
+}
+
+/* ---------- 5. Opción 4 · Continuidad al desplazarse y al cargar ---------- */
+/* Aparición escalonada y breve de los primeros 12 elementos al filtrar, buscar o cargar (--i lo pone ProductViews). */
+.cards > li[style*='--i'],
+.row[style*='--i'] {
+  animation: motion-item-in var(--motion-normal) var(--ease-enter) both;
+  animation-delay: calc(var(--i) * 18ms);
+}
+@keyframes motion-item-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* Encabezado ligado al scroll (M3 top app bar "on scroll"): al bajar por la lista la curva se aplana
+   y aparece una sombra suave que separa el encabezado del contenido. Mejora progresiva: solo donde
+   el navegador soporta animaciones ligadas al scroll; en el resto el encabezado queda como hoy. */
+@supports (animation-timeline: scroll()) {
+  .catalog > .catalog__list {
+    timeline-scope: --lista;
+  }
+  .catalog__area > .scroll,
+  .catalog__area .table__body {
+    scroll-timeline: --lista block;
+  }
+  .catalog > .catalog__list > .hcurve {
+    transform-origin: top center;
+    animation: motion-curve-flatten linear both;
+    animation-timeline: --lista;
+    animation-range: 0 96px;
+  }
+  .catalog__area::before {
+    content: '';
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    pointer-events: none;
+    background: linear-gradient(rgb(0 0 0 / 0.14), transparent);
+    opacity: 0;
+    animation: motion-shadow-in linear both;
+    animation-timeline: --lista;
+    animation-range: 0 96px;
+  }
+}
+@keyframes motion-curve-flatten {
+  to { transform: scaleY(0.4); }
+}
+@keyframes motion-shadow-in {
+  to { opacity: 1; }
+}
+
+/* ---------- 6. Isla de navegación: expandir / recortar (M3 Expressive · riel expandible; Apple HIG · Sidebars) ---------- */
+/* --nav-w se registra como longitud para poder interpolarla: con una sola transición se mueven en sincronía
+   el ancho de la isla, el margen del contenido, el encabezado naranja y su curva (todos dependen de ella). */
+@property --nav-w {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 72px;
+}
+.shell[data-breakpoint='medium'],
+.shell[data-breakpoint='expanded'] {
+  transition: --nav-w var(--motion-normal) var(--ease-emphasized);
+}
+/* Capa que sale: se va rápido. Capa que entra: aparece cuando la isla ya avanzó. */
+.navisland > .rail,
+.navisland > .sidebar {
+  transition:
+    opacity var(--motion-faster) var(--ease-exit),
+    visibility 0s linear var(--motion-faster);
+}
+.navisland[data-collapsed='true'] > .sidebar,
+.navisland[data-collapsed='false'] > .rail {
+  opacity: 0;
+  visibility: hidden;
+}
+.navisland[data-collapsed='true'] > .rail,
+.navisland[data-collapsed='false'] > .sidebar {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--motion-fast) var(--ease-enter) var(--motion-faster),
+    visibility 0s;
+}
+/* Al recortar, el riel entra antes: la isla se cierra sobre él. */
+.navisland[data-collapsed='true'] > .rail {
+  transition-delay: 40ms, 0s;
+}
+
+/* ---------- Accesibilidad: Reducir movimiento ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --press-scale: 1;
+  }
+  .icon-btn--star[data-pop] .icon,
+  .filter__pop,
+  .sheet {
+    animation: none;
+  }
+  .sheet-backdrop,
+  .lightbox {
+    animation-duration: var(--motion-fast);
+  }
+  .cards > li[style*='--i'],
+  .row[style*='--i'],
+  .catalog > .catalog__list > .hcurve {
+    animation: none;
+  }
+  /* Pestañas y paginación: solo fundido, sin escala ni desplazamiento. */
+  ::view-transition-new(vista),
+  html[data-vt]::view-transition-new(lista) {
+    animation: motion-fade-in var(--motion-fast) var(--ease-standard) both;
+  }
+  html[data-vt]::view-transition-old(lista) {
+    animation: motion-fade-out var(--motion-faster) var(--ease-standard) both;
+  }
+  /* Isla: cambia de ancho y de capa al instante (un fundido mostraba la barra ancha recortada a 72 px). */
+  .shell[data-breakpoint='medium'],
+  .shell[data-breakpoint='expanded'],
+  .navisland > .rail,
+  .navisland > .sidebar {
+    transition: none !important;
+  }
+  /* Sin desplazamiento ni cambio de tamaño: queda solo el fundido (Apple HIG). */
+  ::view-transition-group(*) {
+    animation: none !important;
+  }
+  /* Detalle: sin desplazamiento ni escala; panel y foto solo se funden, sin escalonado. */
+  html[data-vt^='detalle']::view-transition-new(inspector),
+  html[data-vt^='detalle']::view-transition-new(root) {
+    animation: motion-fade-in var(--motion-fast) var(--ease-standard) both;
+  }
+  html[data-vt^='detalle']::view-transition-old(inspector),
+  html[data-vt^='detalle']::view-transition-old(root) {
+    animation: motion-fade-out var(--motion-fast) var(--ease-standard) both;
+  }
+  ::view-transition-old(foto),
+  ::view-transition-new(foto) {
+    animation-duration: var(--motion-fast);
+  }
+  html[data-vt='detalle-abre'] .detail__content > :not(.watermark),
+  html[data-vt='detalle-abre'] .detail__action {
+    animation: none;
+  }
+}

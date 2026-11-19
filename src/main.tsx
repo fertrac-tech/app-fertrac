@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import './ui/styles/tokens.css';
 import './ui/styles/app.css';
 import './ui/styles/curva.css';
+import './ui/styles/motion.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readConfig } from './app/config';

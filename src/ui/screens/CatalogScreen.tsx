@@ -12,6 +12,7 @@ import { MultiSelectFilter } from '../components/MultiSelectFilter';
 import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { SyncButton, SyncStamp } from '../layout/Shell';
+import { closeWithTransform, openWithTransform, shiftWithAxis } from '../motion/viewTransition';
 
 /** Nombre de cada filtro en la URL y en pantalla. */
 const FILTERS: Record<FilterKey, { param: string; label: string; all: string; plural: string }> = {
@@ -133,7 +134,7 @@ export function CatalogScreen() {
 
   const expanded = breakpoint === 'expanded';
   const items = (page?.items ?? []).map((product) => ({ product }));
-  const listProps = { items, selectedRef, isFavorite: fav, onOpen: (ref: string) => update({ ref }), onFavorite };
+  const listProps = { items, selectedRef, isFavorite: fav, onOpen: (ref: string) => openWithTransform(null, ref, () => update({ ref })), onFavorite };
   // El panel de detalle solo existe con un producto elegido; sin él, el catálogo ocupa todo el ancho (fold y horizontal).
   const showDetail = Boolean(selectedRef);
   const total = page ? formatCount(page.total) : '…';
@@ -211,7 +212,7 @@ export function CatalogScreen() {
           <Watermark />
         </div>
 
-        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => update({ p: p > 1 ? String(p) : null })} />}
+        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => shiftWithAxis(p > pageNumber ? 'next' : 'prev', () => update({ p: p > 1 ? String(p) : null }))} />}
       </section>
 
       {showDetail && selectedRef && (
@@ -221,7 +222,7 @@ export function CatalogScreen() {
           favorite={fav(selectedRef)}
           dismiss={breakpoint === 'compact' ? 'back' : 'close'}
           overlay={breakpoint === 'compact'}
-          onDismiss={() => update({ ref: null })}
+          onDismiss={() => closeWithTransform(selectedRef, () => update({ ref: null }))}
           onFavorite={() => setEditing(selectedRef)}
         />
       )}

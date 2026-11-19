@@ -193,8 +193,7 @@
 .shell[data-breakpoint='expanded'][data-nav-collapsed='false'] {
   --nav-w: 240px;
 }
-.shell > .rail,
-.shell > .sidebar {
+.shell > .navisland {
   position: absolute;
   z-index: 30; /* sobre el contenido; debajo de los paneles de filtro (55), hojas y diálogos */
   top: var(--nav-gap);
@@ -208,12 +207,31 @@
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
   box-shadow: var(--glass-shadow);
+  overflow: hidden; /* recorta la capa ancha mientras la isla crece o se encoge */
+}
+/* Capas de la isla: riel (recortada) y barra lateral (expandida). Cada una conserva su ancho final para que
+   su contenido no se reacomode durante la animación: la isla solo la revela o la recorta. */
+.navisland > .rail,
+.navisland > .sidebar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+}
+.navisland > .rail {
+  width: calc(72px - 2px);
+}
+.navisland > .sidebar {
+  width: calc(240px - 2px);
 }
 /* Riel fluido según el alto disponible: isotipo, botones e ítems escalan con la altura de la
    pantalla (vh) entre un mínimo táctil y su tamaño normal. A 412 px de alto (teléfono en
    horizontal) el isotipo queda en ~31 px y todo el riel cabe sin cortar la foto de Perfil;
    desde ~600 px de alto recupera sus medidas normales (44 / 44 / 60 px). */
-.shell > .rail {
+.navisland > .rail {
   --rail-iso: clamp(28px, 7.5vh, 44px);
   --rail-btn: clamp(36px, 10vh, 44px);
   --rail-item: clamp(44px, 12vh, 60px);
@@ -224,33 +242,33 @@
   overscroll-behavior: contain;
   scrollbar-width: none;
 }
-.shell > .rail::-webkit-scrollbar {
+.navisland > .rail::-webkit-scrollbar {
   display: none;
 }
-.shell > .rail > * {
+.navisland > .rail > * {
   flex-shrink: 0;
 }
-.shell > .rail > .logo {
+.navisland > .rail > .logo {
   width: var(--rail-iso);
   height: var(--rail-iso) !important; /* el componente Logo fija el alto en línea */
 }
-.shell > .rail > .icon-btn {
+.navisland > .rail > .icon-btn {
   width: var(--rail-btn);
   height: var(--rail-btn);
 }
-.shell > .rail > span:not(.rail__spacer) {
+.navisland > .rail > span:not(.rail__spacer) {
   height: clamp(0px, 1.5vh, 12px) !important; /* separador bajo el botón de expandir */
 }
-.shell > .rail > a:not(.rail__profile) {
+.navisland > .rail > a:not(.rail__profile) {
   height: var(--rail-item);
 }
 /* La foto abre Perfil: botón cuadrado como los demás (antes heredaba los 60 px de alto de los ítems). */
-.shell > .rail > .rail__profile {
+.navisland > .rail > .rail__profile {
   align-self: center;
   width: var(--rail-btn);
   height: var(--rail-btn);
 }
-.shell > .rail > .rail__profile .avatar {
+.navisland > .rail > .rail__profile .avatar {
   width: calc(var(--rail-btn) - 8px) !important;
   height: calc(var(--rail-btn) - 8px) !important;
 }

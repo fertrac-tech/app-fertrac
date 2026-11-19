@@ -116,8 +116,21 @@ export function Thumb({ url, size = 40 }: { url: string | null; size?: number })
 }
 
 export function FavButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  // Rebote solo cuando el usuario marca la estrella (no al pintar favoritos ya guardados). Estilo en motion.css.
+  const [pop, setPop] = useState(false);
   return (
-    <button type="button" className="icon-btn icon-btn--star" aria-pressed={active} aria-label={label} onClick={onClick}>
+    <button
+      type="button"
+      className="icon-btn icon-btn--star"
+      aria-pressed={active}
+      aria-label={label}
+      data-pop={pop || undefined}
+      onAnimationEnd={() => setPop(false)}
+      onClick={() => {
+        if (!active && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) setPop(true);
+        onClick();
+      }}
+    >
       <Icon name={active ? 'fav-on' : 'fav-off'} size={22} />
     </button>
   );

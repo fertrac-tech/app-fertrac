@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useHref, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import type { MouseEvent } from 'react';
+import { fadeThrough } from '../motion/viewTransition';
 import { countByList, totalFavorites } from '@/domain/favorites';
 import { formatSyncTime } from '@/domain/text';
 import { ListNameSheet } from '../components/FavoriteSheets';
@@ -65,10 +67,10 @@ function BottomNav() {
 }
 
 /** Riel de navegación (fold abierto / tablet). */
-function Rail({ onToggle, onNewList }: { onToggle: () => void; onNewList?: () => void }) {
+function Rail({ onToggle, onNewList, hidden = false }: { onToggle: () => void; onNewList?: () => void; hidden?: boolean }) {
   const { session } = useReady();
   return (
-    <nav className="rail" aria-label="Navegación principal">
+    <nav className="rail" aria-label="Navegación principal" aria-hidden={hidden || undefined} inert={hidden || undefined}>
       <Logo variant="isotipo" height={44} />
       <button type="button" className="icon-btn" aria-label="Expandir barra de navegación" onClick={onToggle} style={{ alignSelf: 'center' }}>
         <Icon name="right" size={20} />
@@ -97,7 +99,7 @@ function Rail({ onToggle, onNewList }: { onToggle: () => void; onNewList?: () =>
 }
 
 /** Barra lateral (escritorio) con acceso directo a las listas del usuario. */
-function Sidebar({ onNewList, onToggle }: { onNewList: () => void; onToggle: () => void }) {
+function Sidebar({ onNewList, onToggle, hidden = false }: { onNewList: () => void; onToggle: () => void; hidden?: boolean }) {
   const { session } = useContainer();
   const state = useReady();
   const favorites = useFavoritesState();
@@ -107,7 +109,7 @@ function Sidebar({ onNewList, onToggle }: { onNewList: () => void; onToggle: () 
   const activeList = location.pathname === '/favoritos' ? params.get('lista') : null;
 
   return (
-    <nav className="sidebar" aria-label="Navegación principal">
+    <nav className="sidebar" aria-label="Navegación principal" aria-hidden={hidden || undefined} inert={hidden || undefined}>
       <div className="sidebar__brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, whiteSpace: 'nowrap' }}>
           {/* Isla flotante: logo naranja sin fondo, legible sobre el vidrio en claro y oscuro. */}
@@ -154,11 +156,53 @@ function Sidebar({ onNewList, onToggle }: { onNewList: () => void; onToggle: () 
   );
 }
 
+/**
+ * Isla de navegación única (fold, tablet, escritorio): el riel y la barra lateral viven dentro del mismo
+ * contenedor de vidrio. Al expandir o recortar, la isla anima su ancho (--nav-w, registrada con @property en
+ * motion.css) y el contenido principal se desplaza en sincronía; por dentro, una capa se funde en la otra.
+ * La capa inactiva queda inerte y oculta para lectores de pantalla.
+ */
+function NavIsland({ collapsed, onToggle, onNewList }: { collapsed: boolean; onToggle: () => void; onNewList: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  // El botón pulsado queda en la capa que se oculta: el foco pasa al botón equivalente de la otra capa.
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const label = collapsed ? 'Expandir barra de navegación' : 'Recortar barra de navegación';
+    ref.current?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.focus({ preventScroll: true });
+  }, [collapsed]);
+
+  return (
+    <div className="navisland" data-collapsed={collapsed} ref={ref}>
+      <Rail onToggle={onToggle} onNewList={onNewList} hidden={!collapsed} />
+      <Sidebar onNewList={onNewList} onToggle={onToggle} hidden={collapsed} />
+    </div>
+  );
+}
+
 export function Shell() {
   const breakpoint = useBreakpoint();
   const state = useReady();
   const navigate = useNavigate();
+  const base = useHref('/');
   const [creatingList, setCreatingList] = useState(false);
+
+  /**
+   * Destinos principales (barra inferior, riel, barra lateral, barra superior): Fade through de Material 3.
+   * Solo cuando cambia la pantalla; dentro de la misma (p. ej. otra lista de Favoritos) el enlace sigue normal.
+   */
+  const onNavClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const link = (event.target as Element).closest<HTMLAnchorElement>('nav a[href], .appbar a[href]');
+    if (!link || link.target || link.origin !== window.location.origin) return;
+    if (link.pathname === window.location.pathname) return;
+    event.preventDefault();
+    const path = link.pathname.startsWith(base) ? `/${link.pathname.slice(base.length)}` : link.pathname;
+    fadeThrough(() => navigate(path + link.search), link.pathname);
+  };
   const [navCollapsed, setNavCollapsed] = useState(() => {
     try {
       const stored = window.localStorage.getItem('fertrac_nav_collapsed');
@@ -171,13 +215,10 @@ export function Shell() {
   }, [navCollapsed]);
 
   return (
-    <div className="shell" data-breakpoint={breakpoint} data-nav-collapsed={navCollapsed}>
-      {breakpoint === 'expanded' && (navCollapsed
-        ? <Rail onToggle={() => setNavCollapsed(false)} onNewList={() => setCreatingList(true)} />
-        : <Sidebar onNewList={() => setCreatingList(true)} onToggle={() => setNavCollapsed(true)} />)}
-      {breakpoint === 'medium' && (navCollapsed
-        ? <Rail onToggle={() => setNavCollapsed(false)} onNewList={() => setCreatingList(true)} />
-        : <Sidebar onNewList={() => setCreatingList(true)} onToggle={() => setNavCollapsed(true)} />)}
+    <div className="shell" data-breakpoint={breakpoint} data-nav-collapsed={navCollapsed} onClickCapture={onNavClick}>
+      {breakpoint !== 'compact' && (
+        <NavIsland collapsed={navCollapsed} onToggle={() => setNavCollapsed((c) => !c)} onNewList={() => setCreatingList(true)} />
+      )}
       <div className="shell__main">
         {breakpoint === 'compact' && <AppBar />}
         {state.syncError && (
