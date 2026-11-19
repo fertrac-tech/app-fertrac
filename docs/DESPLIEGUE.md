@@ -10,7 +10,7 @@
 
 > ⚠️ **Un push a `main` publica en producción.** Antes de hacer push, valida en local con `npm run verify` y prueba la demo o el staging local.
 
-El staging publicado en `https://fertrac-tech.github.io/app-fertrac/` está **retirado**. Un repositorio tiene un solo sitio de Pages, y ese sitio ahora es `app.fertrac.com`. Los workflows `deploy-staging.yml` y `deploy-production.yml` quedan solo como manuales, con un `echo` que lo indica.
+El staging publicado en `https://fertrac-tech.github.io/app-fertrac/` está **retirado**. Un repositorio tiene un solo sitio de Pages, y ese sitio ahora es `app.fertrac.com`. Los workflows `deploy-staging.yml` y `deploy-production.yml` se eliminaron; la publicación se hace únicamente con `deploy.yml`.
 
 ## Workflows (GitHub Actions)
 
@@ -18,7 +18,6 @@ El staging publicado en `https://fertrac-tech.github.io/app-fertrac/` está **re
 |---|---|---|
 | `ci.yml` | push a `main` / `develop`, pull requests | typecheck, pruebas y build |
 | `deploy.yml` | push a `main`, manual | `npm ci` → typecheck → pruebas → `npm run build` (`.env.production`) → `dist/CNAME = app.fertrac.com` → GitHub Pages |
-| `deploy-staging.yml`, `deploy-production.yml` | Solo manual | Retirados (no hacen nada) |
 
 ## Configuración del repositorio (una sola vez)
 
