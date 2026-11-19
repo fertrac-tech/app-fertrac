@@ -1,0 +1,27 @@
+# Por defecto: Git detecta si es texto y lo guarda con LF
+* text=auto eol=lf
+
+# Scripts de Windows: necesitan CRLF para ejecutarse bien
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Scripts de shell: deben ser LF o fallan en Linux/CI
+gradlew text eol=lf
+*.sh    text eol=lf
+
+# Binarios: sin conversión ni diff de texto
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.webp   binary
+*.pdf    binary
+*.mp4    binary
+*.jar    binary
+*.keystore binary
+*.jks    binary
+*.penpot binary
+
+# Lockfiles: sin diff línea a línea en revisiones
+package-lock.json -diff
