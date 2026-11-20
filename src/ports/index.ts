@@ -43,7 +43,8 @@ export interface CatalogRepository {
   query(query: CatalogQuery): Promise<CatalogPage>;
   get(ref: string): Promise<Product | undefined>;
   getMany(refs: readonly string[]): Promise<Product[]>;
-  facets(): Promise<Facets>;
+  /** Opciones de cada filtro según el texto y los demás filtros activos (facetas dependientes). */
+  facets(query?: Pick<CatalogQuery, 'text' | 'filters'>): Promise<Facets>;
   lastSyncedAt(): Promise<number | null>;
   /** Borra todo lo guardado en el dispositivo (acceso revocado o cierre de sesión). */
   clear(): Promise<void>;

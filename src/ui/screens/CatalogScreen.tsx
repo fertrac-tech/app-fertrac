@@ -109,7 +109,8 @@ export function CatalogScreen() {
   }, [draft]);
 
   const { data: page } = useQuery(() => catalog.query({ text, filters, page: pageNumber }), [text, filtersKey, pageNumber, catalogVersion]);
-  const { data: facets } = useQuery(() => catalog.facets(), [catalogVersion]);
+  // Filtros en cascada: las opciones de cada filtro se reducen según el texto y los demás filtros.
+  const { data: facets } = useQuery(() => catalog.facets({ text, filters }), [text, filtersKey, catalogVersion]);
   const { data: selected, loading: loadingSelected } = useQuery(
     async () => (selectedRef ? catalog.get(selectedRef) : undefined),
     [selectedRef, catalogVersion],

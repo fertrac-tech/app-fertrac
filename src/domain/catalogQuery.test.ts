@@ -102,3 +102,48 @@ describe('CatalogIndex.query', () => {
     expect(facets.condition).toEqual(['NORMAL', 'NUEVO', 'PROMO']);
   });
 });
+
+describe('facetas dinámicas (filtros en cascada)', () => {
+  const items = [
+    makeProduct({ ref: 'A1', category: 'FRENOS', type: 'Aire', brand: 'MERITOR', line: 'EJE' }),
+    makeProduct({ ref: 'A2', category: 'FRENOS', type: 'Hidráulico', brand: 'BENDIX', line: 'EJE' }),
+    makeProduct({ ref: 'B1', category: 'MOTOR', type: 'Filtro', brand: 'FLEETGUARD', line: 'MOTOR' }),
+    makeProduct({ ref: 'B2', category: 'MOTOR', type: 'Bomba', brand: 'CUMMINS', line: 'MOTOR', name: 'BOMBA DE AGUA' }),
+    makeProduct({ ref: 'C1', category: 'ELECTRICO', type: 'Alternador', brand: 'BENDIX', line: 'ELECTRICO' }),
+  ];
+  const idx = new CatalogIndex(items);
+
+  it('sin filtros devuelve todos los valores', () => {
+    expect(idx.facets({}).type).toEqual(['Aire', 'Alternador', 'Bomba', 'Filtro', 'Hidráulico']);
+  });
+
+  it('al filtrar por categoría, los demás filtros se reducen a los valores de esa categoría', () => {
+    const f = idx.facets({ filters: { category: ['FRENOS'] } });
+    expect(f.type).toEqual(['Aire', 'Hidráulico']);
+    expect(f.brand).toEqual(['BENDIX', 'MERITOR']);
+    expect(f.line).toEqual(['EJE']);
+  });
+
+  it('el propio filtro conserva todas sus opciones para poder sumar valores (OR)', () => {
+    expect(idx.facets({ filters: { category: ['FRENOS'] } }).category).toEqual(['ELECTRICO', 'FRENOS', 'MOTOR']);
+  });
+
+  it('cada filtro se reduce por los demás filtros activos (AND entre filtros)', () => {
+    const f = idx.facets({ filters: { category: ['FRENOS', 'ELECTRICO'], brand: ['BENDIX'] } });
+    expect(f.type).toEqual(['Alternador', 'Hidráulico']);
+    // Categoría se reduce por la marca, no por sí misma.
+    expect(f.category).toEqual(['ELECTRICO', 'FRENOS']);
+    // Marca se reduce por la categoría, no por sí misma.
+    expect(f.brand).toEqual(['BENDIX', 'MERITOR']);
+  });
+
+  it('el texto de búsqueda también reduce las opciones', () => {
+    expect(idx.facets({ text: 'bomba' }).category).toEqual(['MOTOR']);
+  });
+
+  it('un valor marcado sigue visible aunque los demás filtros lo dejen sin productos (para poder desmarcarlo)', () => {
+    const f = idx.facets({ filters: { category: ['FRENOS'], type: ['Bomba'] } });
+    expect(f.type).toContain('Bomba');
+    expect(f.category).toContain('FRENOS');
+  });
+});

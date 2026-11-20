@@ -53,8 +53,8 @@ export class SnapshotCatalogRepository implements CatalogRepository {
     return (await this.ready()).getMany(refs);
   }
 
-  async facets(): Promise<Facets> {
-    return (await this.ready()).facets();
+  async facets(query: Pick<CatalogQuery, 'text' | 'filters'> = {}): Promise<Facets> {
+    return (await this.ready()).facets(query);
   }
 
   async lastSyncedAt(): Promise<number | null> {
