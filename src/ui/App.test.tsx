@@ -187,8 +187,8 @@ describe('Filtros de selección múltiple con búsqueda', () => {
   it('sin coincidencias muestra un aviso', async () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
-    await userEvent.click(screen.getByRole('button', { name: 'Tipo: Todos' }));
-    await userEvent.type(screen.getByRole('combobox', { name: 'Buscar en Tipo' }), 'zzzz');
+    await userEvent.click(screen.getByRole('button', { name: 'Tipo Prod: Todos' }));
+    await userEvent.type(screen.getByRole('combobox', { name: 'Buscar en Tipo Prod' }), 'zzzz');
     expect(screen.getByText('Sin coincidencias')).toBeInTheDocument();
   });
 });
