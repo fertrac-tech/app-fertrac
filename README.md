@@ -96,8 +96,10 @@ Cada entorno muestra su etiqueta (DEMO o STAGING) y guarda sus datos locales en 
 | `VITE_GOOGLE_CLIENT_ID` | Cliente OAuth web (obligatorio fuera de la demo) |
 | `VITE_ALLOWED_DOMAIN` | Dominio permitido (por defecto `fertrac.com`) |
 | `VITE_OFFLINE_MAX_HOURS` | Vida de la copia local (por defecto 24) |
-| `VITE_PRIVACY_POLICY_URL` | Enlace a la política de datos |
+| `VITE_PRIVACY_POLICY_URL` | Enlace a la política de datos (ver nota abajo) |
 | `VITE_ENV_LABEL` | Etiqueta visible del entorno |
+
+**Política de protección de datos en producción.** El enlace "Ver Política de Protección de Datos" (Login y Dispositivo pendiente) apunta a `https://fertrac.com/img/politica-manejo-de-datos.pdf`. En el despliegue **no** se toma de `.env.production`: `deploy.yml` lo inyecta desde la variable del repositorio `PRIVACY_POLICY_URL` (GitHub → *Settings* → *Secrets and variables* → *Actions* → *Variables*), y una variable de entorno tiene prioridad sobre el archivo `.env`. Si esa variable no existe, el build recibe un valor vacío y el enlace queda deshabilitado aunque el CI salga en verde. Para cambiar el enlace: edita la variable y vuelve a ejecutar *Actions → Deploy* (no hace falta commit). Para local y staging, completa `VITE_PRIVACY_POLICY_URL` en `.env.staging` / `.env.production`.
 
 ### Calidad
 
