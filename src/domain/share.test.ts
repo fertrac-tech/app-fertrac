@@ -7,10 +7,12 @@ describe('shareText', () => {
     const p = makeProduct({ ref: 'AMK-2210', name: 'AMORTIGUADOR CABINA T800', brand: 'FERTRAC', prices: { gross: 412000, net5: 391400, net8: 379040, promo: null } });
     expect(shareText(p)).toBe('*AMORTIGUADOR CABINA T800*\nRef. AMK-2210 · FERTRAC\nPrecio: $ 412.000\n\nFertrac · Siempre Calidad Original');
   });
-  it('agrega el precio promo cuando existe y nunca comparte los netos', () => {
+  it('comparte solo el precio bruto (margen de negociación del vendedor): ni promo ni netos', () => {
     const p = makeProduct({ ref: 'P1', prices: { gross: 100000, net5: 95000, net8: 92000, promo: 80000 } });
     const text = shareText(p);
-    expect(text).toContain('Precio promo: $ 80.000');
+    expect(text).toContain('Precio: $ 100.000');
+    expect(text).not.toContain('80.000');
+    expect(text).not.toMatch(/promo/i);
     expect(text).not.toContain('95.000');
     expect(text).not.toContain('92.000');
   });

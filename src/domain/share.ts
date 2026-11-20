@@ -7,13 +7,13 @@ const EXTENSION: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'p
 const hasValue = (v: number | string | null | undefined) => formatPrice(v) !== '—';
 
 /**
- * Texto que acompaña la foto. Regla de negocio: solo el precio bruto (y el promo si existe);
- * los netos −5 % / −8 % son internos y no se comparten. Usa *negrita* de WhatsApp.
+ * Texto que acompaña la foto. Regla de negocio (2026-11-20): solo el precio bruto, para que el
+ * vendedor tenga margen de negociación; el precio promo y los netos −5 % / −8 % no se comparten.
+ * Usa *negrita* de WhatsApp.
  */
 export function shareText(product: Product, alias?: string | null): string {
   const lines = [`*${alias || product.name}*`, [`Ref. ${product.ref}`, product.brand].filter(Boolean).join(' · ')];
   if (hasValue(product.prices.gross)) lines.push(`Precio: ${formatPrice(product.prices.gross)}`);
-  if (hasValue(product.prices.promo)) lines.push(`Precio promo: ${formatPrice(product.prices.promo)}`);
   lines.push('', 'Fertrac · Siempre Calidad Original');
   return lines.join('\n');
 }

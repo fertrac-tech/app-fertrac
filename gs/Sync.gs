@@ -89,11 +89,10 @@ function ejecutarCompleta_() {
   const shLista = ssLista.getSheetByName(CONFIG.SHEET_LISTA);
   const ahora = new Date();
   const { LISTA_DATA_ROW, LISTA_COL_REF, LISTA_COL_ALT, LISTA_COL_PROD, LISTA_COL_PRECIO, LISTA_COL_INV } = CONFIG;
-  const { MOTOR_DATA_ROW, MOTOR_COL_REF, MOTOR_TOTAL_COLS } = CONFIG;
+  const { MOTOR_DATA_ROW, MOTOR_COL_REF, MOTOR_COL_FOTO, MOTOR_TOTAL_COLS } = CONFIG;
 
   // Columnas de Hoja2 (1-based) a sincronizar desde LISTA DE PRECIOS.
-  // B (foto) NUNCA se toca: la gestiona el proceso de fotos
-  // (sincronizarFotosCache / reconstruirFotosCache).
+  // B (foto) se actualiza al final con la fórmula VLOOKUP hacia CACHE_.
   // H (LINEA) e I (MARCA): LISTA DE PRECIOS tiene PRIORIDAD. Si LISTA trae
   // valor, sobrescribe lo que haya en Hoja2 (incluida la clasificación
   // manual). Si LISTA viene vacía o en 0, se conserva el valor actual.
@@ -333,7 +332,6 @@ function ejecutarCompleta_() {
     const datos = mapaLista.get(ref);
     const filaVacia = new Array(MOTOR_TOTAL_COLS).fill("");
     filaVacia[0]  = ref;
-    // filaVacia[1] (B) = FOTO se deja vacía: la gestiona el proceso de fotos
     filaVacia[2]  = datos.alt;
     filaVacia[3]  = String(datos.prod == null ? "" : datos.prod).trim();
     filaVacia[4]  = 0;
@@ -363,6 +361,18 @@ function ejecutarCompleta_() {
     shMotor.getRange(ultimaFilaRegistro + 1, 1, nuevasFilas.length, MOTOR_TOTAL_COLS).setValues(nuevasFilas);
   }
   const nuevas = refsNuevas.length;
+
+  // ── 7. Actualizar columna B (FOTO) con la fórmula hacia CACHE_ ──
+  const ultimaFilaFinal = ultimaFilaRegistro + nuevas;
+  if (ultimaFilaFinal >= MOTOR_DATA_ROW) {
+    const totalFilasB = ultimaFilaFinal - MOTOR_DATA_ROW + 1;
+    const formulasB = new Array(totalFilasB);
+    for (let i = 0; i < totalFilasB; i++) {
+      const fila = MOTOR_DATA_ROW + i;
+      formulasB[i] = ['=IF(A' + fila + '="", "", IFERROR(VLOOKUP(A' + fila + '&"", ' + CONFIG.SHEET_CACHE + '!A:C, 3, FALSE), "Sin Foto"))'];
+    }
+    shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_FOTO, totalFilasB, 1).setFormulas(formulasB);
+  }
 
   console.log(`✅ Sync COMPLETA | Actualizadas: ${actualizadas} | Nuevas: ${nuevas} | Inactivadas: ${inactivadas}`);
   if (refsActualizadas.length > 0) console.log("🔍 Referencias actualizadas:", refsActualizadas.join(", "));
