@@ -21,7 +21,7 @@ const FILTERS: Record<FilterKey, { param: string; label: string; all: string; pl
   brand: { param: 'marca', label: 'Marca', all: 'Todas', plural: 'seleccionadas' },
   category: { param: 'categoria', label: 'Categoría', all: 'Todas', plural: 'seleccionadas' },
   subcategory: { param: 'subcategoria', label: 'Subcategoría', all: 'Todas', plural: 'seleccionadas' },
-  type: { param: 'tipo', label: 'Tipo', all: 'Todos', plural: 'seleccionados' },
+  type: { param: 'tipo', label: 'Tipo Prod', all: 'Todos', plural: 'seleccionados' },
   condition: { param: 'condicion', label: 'Condición', all: 'Todas', plural: 'seleccionadas' },
 };
 

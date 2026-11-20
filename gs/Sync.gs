@@ -3,43 +3,9 @@
 // Todos los IDs, hojas y columnas vienen de CONFIG (Config.gs).
 // ============================================================
 
-// ── Cada 5 min: solo precio e inventario + inactivas (NUNCA envía correo) ──
-function sincronizarListaABaseMotor() {
-
-  const ahora = new Date();
-  const hora  = ahora.getHours();
-  const dia   = ahora.getDay();
-
-  const esLunesViernes = dia >= 1 && dia <= 5 && hora >= 7 && hora <= 19;
-  const esSabado       = dia === 6 && hora >= 8 && hora < 13;
-
-  if (!esLunesViernes && !esSabado) {
-    console.log("⏸ Fuera de horario — omitiendo ejecución");
-    return;
-  }
-
-  // ⚠️ LOCK GLOBAL (docs/LOCK_APPS_SCRIPT.md): mientras ESTA sync se ejecuta,
-  // la hoja queda bloqueada para otros y la app responde 'temporalmente_ocupado'
-  // (falla la sincronización hasta que termina). La app reintenta sola.
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    console.log("🔒 Otra ejecución en curso — omitiendo");
-    return;
-  }
-
-  try {
-    ejecutarDiurna_();
-  } catch (e) {
-    registrarLog_('error', 'backend', 'sync_diurna', e.message, e.stack || '', '', '');
-    console.log("❌ Error:", e.message);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
 // ── Actualización completa. ignorarHorario = true omite la validación
 //    de horario laboral (se usa cuando se dispara por edición) ──
-function sincronizacionCompleta(ignorarHorario) {
+async function sincronizacionCompleta(ignorarHorario) {
 
   const ahora = new Date();
   const hora  = ahora.getHours();
@@ -53,8 +19,6 @@ function sincronizacionCompleta(ignorarHorario) {
     return;
   }
 
-  const enviarCorreo = hora === 7 || hora === 12 || hora === 19;
-
   // ⚠️ LOCK GLOBAL (docs/LOCK_APPS_SCRIPT.md): mientras ESTA sync se ejecuta,
   // la hoja queda bloqueada para otros y la app responde 'temporalmente_ocupado'
   // (falla la sincronización hasta que termina). La app reintenta sola.
@@ -64,195 +28,52 @@ function sincronizacionCompleta(ignorarHorario) {
     return;
   }
 
+  let completaOk = false;
   try {
-    ejecutarCompleta_(enviarCorreo);
+    ejecutarCompleta_();
+    completaOk = true;
   } catch (e) {
     registrarLog_('error', 'backend', 'sync_completa', e.message, e.stack || '', '', '');
-    if (enviarCorreo) {
-      const fecha = Utilities.formatDate(new Date(), "America/Bogota", "dd/MM/yyyy HH:mm");
-      GmailApp.sendEmail(
-        CONFIG.CORREO_NOTIFICACION,
-        "❌ Fertrac — Error sincronización completa " + fecha,
-        "La sincronización completa falló.\n\nFecha: " + fecha + "\nError: " + e.message + "\n\n— Fertrac Apps Script"
-      );
-    }
     console.log("❌ Error:", e.message);
   } finally {
     lock.releaseLock();
   }
-}
 
-// ── Funciones de prueba ──
-function probarDiurna() {
-  // ⚠️ LOCK GLOBAL (docs/LOCK_APPS_SCRIPT.md): job de prueba; mientras corre,
-  // bloquea la hoja y fallan las lecturas de la app ('temporalmente_ocupado').
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    console.log("🔒 Otra ejecución en curso — omitiendo");
-    return;
-  }
-  try {
-    ejecutarDiurna_();
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function probarCompleta() {
-  // ⚠️ LOCK GLOBAL (docs/LOCK_APPS_SCRIPT.md): job de prueba; mientras corre,
-  // bloquea la hoja y fallan las lecturas de la app ('temporalmente_ocupado').
-  const lock = LockService.getScriptLock();
-  if (!lock.tryLock(10000)) {
-    console.log("🔒 Otra ejecución en curso — omitiendo");
-    return;
-  }
-  try {
-    ejecutarCompleta_(true);
-  } finally {
-    lock.releaseLock();
+  if (completaOk) {
+    try {
+      const clasifOk = await ejecutarClasificacionManualAsync_();
+      if (clasifOk) {
+        console.log("✅ aplicarClasificacionManual finalizó satisfactoriamente");
+      } else {
+        console.warn("⚠️ aplicarClasificacionManual no se completó satisfactoriamente (revisar log previo)");
+      }
+    } catch (e) {
+      registrarLog_('error', 'backend', 'sync_completa_clasif', e.message, e.stack || '', '', '');
+      console.error("❌ Error esperando aplicarClasificacionManual:", e.message);
+    }
   }
 }
 
-// ============================================================
-// MOTOR DIURNO — Solo precio, inv e inactivas
-// ============================================================
-
-function ejecutarDiurna_() {
-
-  const ahora    = new Date();
-  const ssMotor  = SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR);
-  const ssLista = SpreadsheetApp.openById(CONFIG.ID_LISTA_PRECIOS);
-  const shMotor = ssMotor.getSheetByName(CONFIG.SHEET_MOTOR);
-  const shLista = ssLista.getSheetByName(CONFIG.SHEET_LISTA);
-
-  const { LISTA_DATA_ROW, LISTA_COL_REF, LISTA_COL_ALT, LISTA_COL_PROD, LISTA_COL_PRECIO, LISTA_COL_INV } = CONFIG;
-  const { MOTOR_DATA_ROW, MOTOR_COL_REF, MOTOR_COL_PRECIO, MOTOR_COL_PROMO, MOTOR_COL_INV, MOTOR_TOTAL_COLS } = CONFIG;
-
-  let shInactivas = ssMotor.getSheetByName(CONFIG.SHEET_INACTIVAS);
-  if (!shInactivas) {
-    shInactivas = ssMotor.insertSheet(CONFIG.SHEET_INACTIVAS);
-    shInactivas.getRange(1, 1).setValue("REFERENCIA");
-    shInactivas.getRange(1, 2).setValue("FECHA_INACTIVACION");
-  }
-
-  // ── Leer LISTA DE PRECIOS ──
-  const lastRowLista   = shLista.getLastRow();
-  const totalRowsLista = lastRowLista - LISTA_DATA_ROW + 1;
-  if (totalRowsLista <= 0) return;
-
-  const rangoLista   = shLista.getRange(LISTA_DATA_ROW, 1, totalRowsLista, 17);
-  const dataLista    = rangoLista.getValues();
-  const displayLista = rangoLista.getDisplayValues();
-
-  const mapaLista = new Map();
-  dataLista.forEach((row, i) => {
-    const ref  = String(displayLista[i][LISTA_COL_REF  - 1] || "").trim().toUpperCase();
-    const alt  = String(displayLista[i][LISTA_COL_ALT  - 1] || "").trim();
-    const prod = String(displayLista[i][LISTA_COL_PROD - 1] || "").trim();
-    if (!alt && !prod) return;
-    if (!ref) return;
-    mapaLista.set(ref, {
-      precio: row[LISTA_COL_PRECIO - 1],
-      inv:    row[LISTA_COL_INV - 1],
-      neto5:  row[9],
-      neto8:  row[10],
-      promo:  displayLista[i][11]
-    });
-  });
-
-  // ── Leer columna A de BASE MOTOR ──
-  const lastRowMotor   = shMotor.getLastRow();
-  const totalRowsMotor = lastRowMotor - MOTOR_DATA_ROW + 1;
-  if (totalRowsMotor <= 0) return;
-
-  const refsMotorValues  = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_REF, totalRowsMotor, 1).getValues();
-  const refsMotorDisplay = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_REF, totalRowsMotor, 1).getDisplayValues();
-  const mapaMotor = new Map();
-  refsMotorValues.forEach(([ref], i) => {
-    const key = String(refsMotorDisplay[i][0] || "").trim().toUpperCase();
-    if (key && !mapaMotor.has(key)) mapaMotor.set(key, MOTOR_DATA_ROW + i);
-  });
-
-  // ── 1. Mover inactivas ──
-  let inactivadas = 0;
-  const filasAEliminar = [];
-  mapaMotor.forEach((fila, ref) => {
-    if (!mapaLista.has(ref)) {
-      const filaData = shMotor.getRange(fila, 1, 1, MOTOR_TOTAL_COLS).getDisplayValues()[0];
-      const nuevaFilaInactiva = shInactivas.getLastRow() + 1;
-      shInactivas.getRange(nuevaFilaInactiva, 1, 1, MOTOR_TOTAL_COLS).setValues([filaData]);
-      shInactivas.getRange(nuevaFilaInactiva, 23).setValue(new Date());
-      filasAEliminar.push(fila);
-      inactivadas++;
+/**
+ * Envuelve aplicarClasificacionManual en una Promesa para esperar su
+ * resolución dentro de la misma ejecución y ventana de log.
+ *
+ * @returns {Promise<boolean>} true si se ejecutó satisfactoriamente.
+ */
+function ejecutarClasificacionManualAsync_() {
+  console.log("▶ Iniciando ejecutarClasificacionManualAsync_");
+  return new Promise((resolve, reject) => {
+    try {
+      const ok = Boolean(aplicarClasificacionManual());
+      console.log("◀ ejecutarClasificacionManualAsync_ resultado:", ok);
+      registrarLog_(ok ? 'info' : 'warn', 'backend', 'sync_completa_clasif', 'aplicarClasificacionManual resultado: ' + ok, '', '', '');
+      resolve(ok);
+    } catch (err) {
+      console.error("❌ Error en ejecutarClasificacionManualAsync_:", err.message);
+      registrarLog_('error', 'backend', 'sync_completa_clasif', err.message, err.stack || '', '', '');
+      reject(err);
     }
   });
-  filasAEliminar.sort((a, b) => b - a).forEach(fila => shMotor.deleteRow(fila));
-
-  // ── Recargar después de eliminar ──
-  const lastRowMotor2   = shMotor.getLastRow();
-  const totalRowsMotor2 = lastRowMotor2 - MOTOR_DATA_ROW + 1;
-  if (totalRowsMotor2 <= 0) {
-    console.log(`✅ Sync DIURNA | Actualizadas: 0 | Inactivadas: ${inactivadas}`);
-    return;
-  }
-
-  const refsMotor2 = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_REF, totalRowsMotor2, 1).getValues();
-  const mapaMotor2 = new Map();
-  refsMotor2.forEach(([ref], i) => {
-    const key = String(ref || "").trim().toUpperCase();
-    if (key && !mapaMotor2.has(key)) mapaMotor2.set(key, MOTOR_DATA_ROW + i);
-  });
-
-  // ── 2. Leer bloques UNA sola vez para diff en memoria ──
-  const bloqueKN            = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_PRECIO, totalRowsMotor2, 4).getValues();
-  const bloquePromoDisplay  = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_PROMO, totalRowsMotor2, 1).getDisplayValues();
-  const bloqueS             = shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_INV, totalRowsMotor2, 1).getValues();
-
-  let actualizadas = 0, sinCambios = 0;
-  const filasConCambio = [];
-
-  mapaLista.forEach(({ precio, inv, neto5, neto8, promo }, ref) => {
-    if (!mapaMotor2.has(ref)) return;
-    const filaReal = mapaMotor2.get(ref);
-    const idx = filaReal - MOTOR_DATA_ROW;
-
-    const actual = bloqueKN[idx];
-    let cambio = false;
-
-    if (String(actual[0]) !== String(precio)) { actual[0] = precio; cambio = true; }
-    if (String(actual[1]) !== String(neto5))   { actual[1] = neto5;  cambio = true; }
-    if (String(actual[2]) !== String(neto8))   { actual[2] = neto8;  cambio = true; }
-
-    if (String(bloquePromoDisplay[idx][0]).trim() !== String(promo).trim()) {
-      actual[3] = promo;
-      cambio = true;
-    }
-
-    if (String(bloqueS[idx][0]) !== String(inv)) { bloqueS[idx][0] = inv; cambio = true; }
-
-    if (cambio) {
-      actualizadas++;
-      filasConCambio.push(filaReal);   // Fase 3: W será el reloj del delta
-      // ═══ DIAGNÓSTICO TEMPORAL — quitar cuando se confirme estabilidad ═══
-      console.log(`🔍 Cambio detectado en Ref: ${ref} (fila ${filaReal})`);
-      // ═════════════════════════════════════════════════════════════════
-    } else {
-      sinCambios++;
-    }
-  });
-
-  if (actualizadas > 0) {
-    shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_PRECIO, totalRowsMotor2, 4).setValues(bloqueKN);
-    shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_INV, totalRowsMotor2, 1).setValues(bloqueS);
-    // Marca W (fecha/hora) en las filas realmente cambiadas: alimenta el
-    // endpoint ?delta=1. Cada setValue individual es barato para pocas filas.
-    filasConCambio.forEach(fila => shMotor.getRange(fila, 23).setValue(ahora));
-  }
-
-  console.log(`✅ Sync DIURNA | Filas con cambio real: ${actualizadas} | Sin cambios: ${sinCambios} | Inactivadas: ${inactivadas}`);
-
-  // La app lee Hoja2 con caché: invalidarla para que vea los precios ya.
-  try { invalidarCacheCatalogo_(); } catch (e) {}
 }
 
 // ============================================================
@@ -260,25 +81,29 @@ function ejecutarDiurna_() {
 // (mantiene el orden actual de Hoja2; nuevas van al final)
 // ============================================================
 
-function ejecutarCompleta_(enviarCorreo) {
+function ejecutarCompleta_() {
 
   const ssMotor = SpreadsheetApp.openById(CONFIG.ID_BASE_MOTOR);
   const ssLista = SpreadsheetApp.openById(CONFIG.ID_LISTA_PRECIOS);
   const shMotor = ssMotor.getSheetByName(CONFIG.SHEET_MOTOR);
   const shLista = ssLista.getSheetByName(CONFIG.SHEET_LISTA);
-  const ahora = new Date()
+  const ahora = new Date();
   const { LISTA_DATA_ROW, LISTA_COL_REF, LISTA_COL_ALT, LISTA_COL_PROD, LISTA_COL_PRECIO, LISTA_COL_INV } = CONFIG;
   const { MOTOR_DATA_ROW, MOTOR_COL_REF, MOTOR_TOTAL_COLS } = CONFIG;
 
   // Columnas de Hoja2 (1-based) a sincronizar desde LISTA DE PRECIOS.
-  // B (foto) e I (marca) NUNCA se tocan: la foto la gestiona el proceso
-  // de fotos (sincronizarFotosCache / reconstruirFotosCache) y la marca
-  // la clasificación manual.
+  // B (foto) NUNCA se toca: la gestiona el proceso de fotos
+  // (sincronizarFotosCache / reconstruirFotosCache).
+  // H (LINEA) e I (MARCA): LISTA DE PRECIOS tiene PRIORIDAD. Si LISTA trae
+  // valor, sobrescribe lo que haya en Hoja2 (incluida la clasificación
+  // manual). Si LISTA viene vacía o en 0, se conserva el valor actual.
   // Nota: la letra de columna y el número deben coincidir (A=1 ... Z=26).
+  const COLS_PRIORIDAD_LISTA = [8, 9];   // H - LINEA, I - MARCA
   const COLS_SYNC = [
     [3,  'alt'],       // C  - REF ALTERNAS
     [4,  'prod'],      // D  - PRODUCTO
-    [8,  'linea'],     // H  - LINEA
+    [8,  'linea'],     // H  - LINEA  (prioridad LISTA, col U)
+    [9,  'marca'],     // I  - MARCA  (prioridad LISTA, col H)
     [11, 'precio'],    // K  - PRECIO BRUTO
     [12, 'neto5'],     // L  - NETO -5%
     [13, 'neto8'],     // M  - NETO -8%
@@ -296,8 +121,7 @@ function ejecutarCompleta_(enviarCorreo) {
   let shInactivas = ssMotor.getSheetByName(CONFIG.SHEET_INACTIVAS);
   if (!shInactivas) {
     shInactivas = ssMotor.insertSheet(CONFIG.SHEET_INACTIVAS);
-    shInactivas.getRange(1, 1).setValue("REFERENCIA");
-    shInactivas.getRange(1, 2).setValue("FECHA_INACTIVACION");
+    shInactivas.getRange(1, 1, 1, 2).setValues([["REFERENCIA", "FECHA_INACTIVACION"]]);
   }
 
   // ── 1. Leer LISTA DE PRECIOS ──
@@ -311,12 +135,14 @@ function ejecutarCompleta_(enviarCorreo) {
 
   const refsOrdenadas = [];
   const mapaLista = new Map();
-  dataLista.forEach((row, i) => {
-    const ref  = String(displayLista[i][LISTA_COL_REF  - 1] || "").trim().toUpperCase();
-    const alt  = String(displayLista[i][LISTA_COL_ALT  - 1] || "").trim();
-    const prod = String(displayLista[i][LISTA_COL_PROD - 1] || "").trim();
-    if (!alt && !prod) return;
-    if (!ref) return;
+  for (let i = 0; i < dataLista.length; i++) {
+    const row  = dataLista[i];
+    const disp = displayLista[i];
+    const ref  = String(disp[LISTA_COL_REF  - 1] || "").trim().toUpperCase();
+    const alt  = String(disp[LISTA_COL_ALT  - 1] || "").trim();
+    const prod = String(disp[LISTA_COL_PROD - 1] || "").trim();
+    if (!alt && !prod) continue;
+    if (!ref) continue;
     if (!mapaLista.has(ref)) {
       refsOrdenadas.push(ref);
       mapaLista.set(ref, {
@@ -324,11 +150,11 @@ function ejecutarCompleta_(enviarCorreo) {
         inv:       row[LISTA_COL_INV - 1],
         alt:       row[4],
         prod:      String(row[5] == null ? "" : row[5]).trim(),
-        linea:     row[20],
-        marca:     row[7],
+        linea:     textoClasif_(row[20]),   // U de LISTA
+        marca:     textoClasif_(row[7]),    // H de LISTA
         neto5:     row[9],
         neto8:     row[10],
-        promo:     displayLista[i][11],   // L de LISTA → texto literal
+        promo:     disp[11],                // L de LISTA → texto literal
         undEscala: row[12],
         undMin:    row[13],
         undMax:    row[14],
@@ -338,7 +164,7 @@ function ejecutarCompleta_(enviarCorreo) {
         condicion: row[19]
       });
     }
-  });
+  }
 
   if (mapaLista.size === 0) { console.log("⚠️ Sin referencias válidas en LISTA DE PRECIOS"); return; }
 
@@ -349,71 +175,161 @@ function ejecutarCompleta_(enviarCorreo) {
 
   const dataMotor = shMotor.getRange(MOTOR_DATA_ROW, 1, totalRowsMotor, MOTOR_TOTAL_COLS).getValues();
   const mapaMotor = new Map();
-  dataMotor.forEach((row, i) => {
+  for (let i = 0; i < dataMotor.length; i++) {
+    const row = dataMotor[i];
     const key = String(row[MOTOR_COL_REF - 1] || "").trim().toUpperCase();
     if (key && !mapaMotor.has(key)) mapaMotor.set(key, { filaReal: MOTOR_DATA_ROW + i, row });
-  });
-
-  // ── 3. Inactivas: mover a INACTIVAS y borrar de Hoja2 ──
-  const refsInactivas = [];
-  mapaMotor.forEach(({ filaReal, row }, ref) => {
-    if (!mapaLista.has(ref)) {
-      const nuevaFilaInactiva = shInactivas.getLastRow() + 1;
-      shInactivas.getRange(nuevaFilaInactiva, 1, 1, MOTOR_TOTAL_COLS).setValues([row]);
-      shInactivas.getRange(nuevaFilaInactiva, 23).setValue(new Date());
-      refsInactivas.push({ ref, filaReal });
-    }
-  });
-  refsInactivas.sort((a, b) => b.filaReal - a.filaReal)
-    .forEach(entry => shMotor.deleteRow(entry.filaReal));
-  const inactivadas = refsInactivas.length;
-
-  // ── 4. Recargar Hoja2 tras borrar inactivas ──
-  const lastRowMotor2   = shMotor.getLastRow();
-  const totalRowsMotor2 = lastRowMotor2 - MOTOR_DATA_ROW + 1;
-
-  let mapaMotor2 = new Map();
-  if (totalRowsMotor2 > 0) {
-    const dataMotor2 = shMotor.getRange(MOTOR_DATA_ROW, 1, totalRowsMotor2, MOTOR_TOTAL_COLS).getValues();
-    dataMotor2.forEach((row, i) => {
-      const key = String(row[MOTOR_COL_REF - 1] || "").trim().toUpperCase();
-      if (key && !mapaMotor2.has(key)) mapaMotor2.set(key, { filaReal: MOTOR_DATA_ROW + i, row });
-    });
   }
 
-  // ── 5. Comparar diferencias y actualizar solo las celdas que cambian ──
+  // ── 3. Inactivas: mover en lote a INACTIVAS y borrar bloques contiguos de Hoja2 ──
+  const refsInactivas = [];
+  const filasInactivas = [];
+  const filasBorradasSet = new Set();
+
+  mapaMotor.forEach(({ filaReal, row }, ref) => {
+    if (!mapaLista.has(ref)) {
+      const filaInactiva = row.slice();
+      filaInactiva[22] = ahora;
+      filasInactivas.push(filaInactiva);
+      refsInactivas.push({ ref, filaReal });
+      filasBorradasSet.add(filaReal);
+    }
+  });
+
+  if (filasInactivas.length > 0) {
+    const inicioInactivas = shInactivas.getLastRow() + 1;
+    shInactivas.getRange(inicioInactivas, 1, filasInactivas.length, MOTOR_TOTAL_COLS).setValues(filasInactivas);
+
+    // Agrupar filas contiguas (de abajo hacia arriba) para usar deleteRows() en lugar de deleteRow() uno a uno
+    const filasDesc = refsInactivas.map(e => e.filaReal).sort((a, b) => b - a);
+    let rangoFin = filasDesc[0];
+    let cantidad = 1;
+    for (let i = 1; i < filasDesc.length; i++) {
+      if (filasDesc[i] === rangoFin - cantidad) {
+        cantidad++;
+      } else {
+        shMotor.deleteRows(rangoFin - cantidad + 1, cantidad);
+        rangoFin = filasDesc[i];
+        cantidad = 1;
+      }
+    }
+    shMotor.deleteRows(rangoFin - cantidad + 1, cantidad);
+  }
+  const inactivadas = refsInactivas.length;
+
+  // ── 4. Reconstruir índice de Hoja2 en memoria (evita releer toda la hoja) ──
+  let dataMotor2;
+  let mapaMotor2;
+  let ultimaFilaRegistro = MOTOR_DATA_ROW - 1;
+  if (inactivadas === 0) {
+    dataMotor2 = dataMotor;
+    mapaMotor2 = mapaMotor;
+    for (let i = dataMotor2.length - 1; i >= 0; i--) {
+      if (String(dataMotor2[i][MOTOR_COL_REF - 1] || "").trim()) {
+        ultimaFilaRegistro = MOTOR_DATA_ROW + i;
+        break;
+      }
+    }
+  } else {
+    dataMotor2 = [];
+    mapaMotor2 = new Map();
+    for (let i = 0; i < dataMotor.length; i++) {
+      if (filasBorradasSet.has(MOTOR_DATA_ROW + i)) continue;
+      const row = dataMotor[i];
+      const nuevoIdx = dataMotor2.length;
+      dataMotor2.push(row);
+      const key = String(row[MOTOR_COL_REF - 1] || "").trim().toUpperCase();
+      if (key) {
+        ultimaFilaRegistro = MOTOR_DATA_ROW + nuevoIdx;
+        if (!mapaMotor2.has(key)) {
+          mapaMotor2.set(key, { filaReal: ultimaFilaRegistro, row });
+        }
+      }
+    }
+  }
+
+  const totalRowsMotor2 = dataMotor2.length;
+
+  // ── 5. Comparar diferencias en memoria y escribir por bloques de columnas ──
   let actualizadas = 0;
   const refsActualizadas = [];
-  const actualizaciones = [];
+  let tocaCD = false;
+  let tocaHI = false;
+  let tocaKW = false;
+  let minIdx = totalRowsMotor2;
+  let maxIdx = -1;
 
   mapaLista.forEach((datos, ref) => {
     if (!mapaMotor2.has(ref)) return;
     const { filaReal, row } = mapaMotor2.get(ref);
+    const idx = filaReal - MOTOR_DATA_ROW;
     let cambio = false;
-    COLS_SYNC.forEach(([col, campo]) => {
+
+    for (let c = 0; c < COLS_SYNC.length; c++) {
+      const [col, campo] = COLS_SYNC[c];
       let valor = datos[campo];
       if (col === 4) valor = String(valor == null ? "" : valor).trim();
-      if (String(row[col - 1]) !== String(valor)) {
-        actualizaciones.push({ filaReal, col, valor });
-        cambio = true;
+      if (COLS_PRIORIDAD_LISTA.includes(col)) {
+        if (!valor) continue;                                  // LISTA vacía → conservar Hoja2
+        if (textoClasif_(row[col - 1]) === valor) continue;    // ignora espacios/mayúsculas
       }
-    });
+      if (String(row[col - 1]) !== String(valor)) {
+        row[col - 1] = valor;
+        cambio = true;
+        if (col <= 4)       tocaCD = true;
+        else if (col <= 9)  tocaHI = true;
+        else                tocaKW = true;
+      }
+    }
+
     if (cambio) {
-      actualizaciones.push({ filaReal, col: 23, valor: ahora }); // W - fecha/hora de actualización
+      row[22] = ahora; // W - fecha/hora de actualización
+      tocaKW = true;
       actualizadas++;
       refsActualizadas.push(ref);
+      if (idx < minIdx) minIdx = idx;
+      if (idx > maxIdx) maxIdx = idx;
     }
   });
 
-  if (actualizaciones.length > 0) {
-    actualizaciones.forEach(up => shMotor.getRange(up.filaReal, up.col).setValue(up.valor));
+  // Escribir solo el rango [minIdx..maxIdx] en máx. 3 llamadas setValues() sin tocar B, E-G ni J
+  if (actualizadas > 0 && maxIdx >= minIdx) {
+    const numFilas = maxIdx - minIdx + 1;
+    const filaInicioEscritura = MOTOR_DATA_ROW + minIdx;
+
+    if (tocaCD) {
+      const bloqueCD = new Array(numFilas);
+      for (let i = 0; i < numFilas; i++) {
+        const r = dataMotor2[minIdx + i];
+        bloqueCD[i] = [r[2], r[3]];
+      }
+      shMotor.getRange(filaInicioEscritura, 3, numFilas, 2).setValues(bloqueCD);
+    }
+
+    if (tocaHI) {
+      const bloqueHI = new Array(numFilas);
+      for (let i = 0; i < numFilas; i++) {
+        const r = dataMotor2[minIdx + i];
+        bloqueHI[i] = [r[7], r[8]];
+      }
+      shMotor.getRange(filaInicioEscritura, 8, numFilas, 2).setValues(bloqueHI);
+    }
+
+    if (tocaKW) {
+      const bloqueKW = new Array(numFilas);
+      for (let i = 0; i < numFilas; i++) {
+        bloqueKW[i] = dataMotor2[minIdx + i].slice(10, 23);
+      }
+      shMotor.getRange(filaInicioEscritura, 11, numFilas, 13).setValues(bloqueKW);
+    }
   }
 
-  // ── 6. Nuevas referencias al final de Hoja2 ──
+  // ── 6. Nuevas referencias después del último registro de Hoja2 ──
   const refsNuevas = [];
   const nuevasFilas = [];
-  refsOrdenadas.forEach(ref => {
-    if (mapaMotor2.has(ref)) return;
+  for (let i = 0; i < refsOrdenadas.length; i++) {
+    const ref = refsOrdenadas[i];
+    if (mapaMotor2.has(ref)) continue;
     const datos = mapaLista.get(ref);
     const filaVacia = new Array(MOTOR_TOTAL_COLS).fill("");
     filaVacia[0]  = ref;
@@ -441,10 +357,10 @@ function ejecutarCompleta_(enviarCorreo) {
     filaVacia[22] = ahora; // W - fecha/hora de creación
     nuevasFilas.push(filaVacia);
     refsNuevas.push(ref);
-  });
+  }
 
   if (nuevasFilas.length > 0) {
-    shMotor.getRange(lastRowMotor2 + 1, 1, nuevasFilas.length, MOTOR_TOTAL_COLS).setValues(nuevasFilas);
+    shMotor.getRange(ultimaFilaRegistro + 1, 1, nuevasFilas.length, MOTOR_TOTAL_COLS).setValues(nuevasFilas);
   }
   const nuevas = refsNuevas.length;
 
@@ -453,65 +369,11 @@ function ejecutarCompleta_(enviarCorreo) {
 
   // La app lee Hoja2 con caché: invalidarla para ver los cambios sin esperar TTL.
   try { invalidarCacheCatalogo_(); } catch (e) {}
-
-  // ── 7. Correo ──
-  if (enviarCorreo && (actualizadas > 0 || nuevas > 0 || inactivadas > 0)) {
-    const fecha  = Utilities.formatDate(new Date(), "America/Bogota", "dd/MM/yyyy HH:mm");
-    const asunto = `Fertrac — Sincronización completa ${fecha}`;
-    const cuerpo = `
-    Resumen de sincronización completa — ${fecha}
-
-    ✅ Referencias actualizadas: ${actualizadas}
-    Referencias nuevas: ${nuevas}
-    Referencias inactivadas: ${inactivadas}
-    ${refsNuevas.length    > 0 ? "\nNuevas referencias:\n"      + refsNuevas.join("\n")                : ""}
-    ${refsInactivas.length > 0 ? "\nReferencias inactivadas:\n" + refsInactivas.map(e => e.ref).join("\n") : ""}
-
-    — Fertrac Apps Script
-        `.trim();
-        GmailApp.sendEmail(CONFIG.CORREO_NOTIFICACION, asunto, cuerpo);
-        console.log("📧 Correo enviado a:", CONFIG.CORREO_NOTIFICACION);
-      }
-    }
-
-// ============================================================
-// SYNC COMPLETA — Correr a demanda (una sola vez)
-// Hoja2 conserva su orden actual; solo aplica diferencias.
-// ============================================================
-
-
-function reordenarBaseMotor() {
-  console.log("🔄 Ejecutando sync completa sobre BASE MOTOR...");
-  ejecutarCompleta_(false);
-  console.log("✅ Sync completa finalizada — Hoja2 conserva su orden actual");
 }
 
-// ============================================================
-// DEBUG
-// ============================================================
-
-function contarDuplicadosLista() {
-  const shLista = SpreadsheetApp.openById(CONFIG.ID_LISTA_PRECIOS).getSheetByName(CONFIG.SHEET_LISTA);
-  const lastRow = shLista.getLastRow();
-  const totalRows = lastRow - CONFIG.LISTA_DATA_ROW + 1;
-  const display = shLista.getRange(CONFIG.LISTA_DATA_ROW, 1, totalRows, 6).getDisplayValues();
-
-  const vistas = new Set();
-  let duplicados = 0;
-
-  display.forEach(row => {
-    const ref  = String(row[CONFIG.LISTA_COL_REF - 1] || "").trim().toUpperCase();
-    const alt  = String(row[CONFIG.LISTA_COL_ALT - 1] || "").trim();
-    const prod = String(row[CONFIG.LISTA_COL_PROD - 1] || "").trim();
-    if (!alt && !prod) return;
-    if (!ref) return;
-    if (vistas.has(ref)) {
-      duplicados++;
-    } else {
-      vistas.add(ref);
-    }
-  });
-
-  console.log(`Referencias únicas: ${vistas.size}`);
-  console.log(`Referencias duplicadas: ${duplicados}`);
+// ── Normaliza MARCA/LINEA: texto sin espacios extremos, en mayúsculas;
+//    vacío y "0" (relleno de LISTA) se tratan como "sin dato". ──
+function textoClasif_(v) {
+  const t = String(v == null ? "" : v).trim().toUpperCase();
+  return (t === "0") ? "" : t;
 }
