@@ -13,6 +13,7 @@ import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { SyncButton, SyncStamp } from '../layout/Shell';
 import { closeWithTransform, openWithTransform, shiftWithAxis } from '../motion/viewTransition';
+import { SEARCH_SHORTCUT_ARIA } from '../keyboard/searchShortcut';
 
 /** Nombre de cada filtro en la URL y en pantalla. */
 const FILTERS: Record<FilterKey, { param: string; label: string; all: string; plural: string }> = {
@@ -27,7 +28,8 @@ const FILTERS: Record<FilterKey, { param: string; label: string; all: string; pl
 /** Filtros visibles en el catálogo. "Línea" se retiró de la interfaz (se ignora también en la URL). */
 const VISIBLE_FILTERS = FILTER_KEYS.filter((key) => key !== 'line');
 
-const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition] ?? value : value);
+/** Condición muestra el valor de la hoja tal cual (MAGENTA, NUEVO, NO TIENE…); los enlaces antiguos usan el nombre agrupado. */
+const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition]?.toLocaleUpperCase('es') ?? value : value);
 
 type SelectedFilters = Partial<Record<FilterKey, string[]>>;
 
@@ -147,6 +149,8 @@ export function CatalogScreen() {
         type="search"
         enterKeyHint="search"
         aria-label="Buscar en el catálogo"
+        aria-keyshortcuts={SEARCH_SHORTCUT_ARIA}
+        data-search-shortcut
         placeholder={expanded ? 'Buscar por referencia, producto, marca o alterno…' : 'Buscar referencia, producto, marca…'}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}

@@ -28,6 +28,23 @@ export function conditionLabel(p: Pick<Product, 'condition' | 'promoColor'>): st
   return p.condition;
 }
 
+/** Valor del filtro "Condición" para un producto sin condición (vacío o "NO TIENE" en la hoja). */
+export const NO_CONDITION = 'NO TIENE';
+
+/**
+ * Valor del filtro "Condición": el texto de CONDICIÓN tal como viene en la hoja, en mayúsculas
+ * y sin espacios de sobra, para que el filtro liste TODAS las condiciones (cada color de promoción,
+ * NUEVO, NO TIENE y cualquier otra que negocio agregue). Las copias guardadas en el dispositivo
+ * antes de `conditionText` usan la condición derivada hasta la siguiente sincronización.
+ */
+export function conditionFilterValue(p: Pick<Product, 'condition' | 'promoColor' | 'conditionText'>): string {
+  if (p.conditionText !== undefined) {
+    const text = (p.conditionText ?? '').trim().replace(/\s+/g, ' ').toLocaleUpperCase('es');
+    return text || NO_CONDITION;
+  }
+  return conditionLabel(p) ?? NO_CONDITION;
+}
+
 export interface ProductPrices {
   gross: number | null;
   net5: number | null;

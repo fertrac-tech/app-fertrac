@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CatalogIndex, compareProducts, sortCatalog } from './catalogQuery';
+import { CatalogIndex, compareProducts, sortCatalog, type CatalogFilters } from './catalogQuery';
 import { makeProduct } from './testing';
 
 const catalog = [
@@ -99,7 +99,34 @@ describe('CatalogIndex.query', () => {
     const facets = index.facets();
     expect(facets.brand).toEqual(['FERTRAC', 'IMPORTADO', 'ORIGINAL']);
     expect(facets.line).toEqual(['FRENOS', 'SUSPENSION']);
-    expect(facets.condition).toEqual(['NORMAL', 'NUEVO', 'PROMO']);
+    expect(facets.condition).toEqual(['NUEVO', 'PROMO', 'NO TIENE']);
+  });
+});
+
+describe('filtro Condición con los valores reales de la hoja', () => {
+  const sheet = new CatalogIndex([
+    makeProduct({ ref: 'M-1', condition: 'PROMO', promoColor: 'magenta', conditionText: 'Magenta' }),
+    makeProduct({ ref: 'M-2', condition: 'PROMO', promoColor: 'magenta', conditionText: ' MAGENTA ' }),
+    makeProduct({ ref: 'A-1', condition: 'PROMO', promoColor: 'azul', conditionText: 'Azul' }),
+    makeProduct({ ref: 'L-1', condition: 'NORMAL', conditionText: 'Liquidación' }),
+    makeProduct({ ref: 'N-1', condition: 'NUEVO', conditionText: 'Nuevo' }),
+    makeProduct({ ref: 'X-1', condition: 'NORMAL', conditionText: null }),
+    makeProduct({ ref: 'V-1', condition: 'PROMO', promoColor: 'verde' }), // copia antigua sin conditionText
+  ]);
+  const refsOf = (filters: CatalogFilters) => sheet.query({ filters }).items.map((p) => p.ref).sort();
+
+  it('lista cada condición de la hoja (sin duplicar por mayúsculas o espacios) y "NO TIENE" al final', () => {
+    expect(sheet.facets().condition).toEqual(['AZUL', 'LIQUIDACIÓN', 'MAGENTA', 'NUEVO', 'VERDE', 'NO TIENE']);
+  });
+
+  it('filtra por el valor de la hoja', () => {
+    expect(refsOf({ condition: 'MAGENTA' })).toEqual(['M-1', 'M-2']);
+    expect(refsOf({ condition: ['AZUL', 'LIQUIDACIÓN'] })).toEqual(['A-1', 'L-1']);
+    expect(refsOf({ condition: 'NO TIENE' })).toEqual(['X-1']);
+  });
+
+  it('los enlaces antiguos con el valor agrupado siguen funcionando', () => {
+    expect(refsOf({ condition: 'PROMO' })).toEqual(['A-1', 'M-1', 'M-2', 'V-1']);
   });
 });
 

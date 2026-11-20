@@ -1,5 +1,5 @@
 import { paginate, PAGE_SIZE, type PageInfo } from './pagination';
-import type { Condition, Product } from './product';
+import { conditionFilterValue, NO_CONDITION, type Condition, type Product } from './product';
 import { compareText, normalize } from './text';
 
 export const FILTER_KEYS = ['line', 'brand', 'category', 'subcategory', 'type', 'condition'] as const;
@@ -58,7 +58,15 @@ function activeFilters(filters: CatalogFilters | undefined): (readonly [FilterKe
 }
 
 function filterValue(product: Product, key: FilterKey): string {
-  return key === 'condition' ? product.condition : product[key];
+  return key === 'condition' ? conditionFilterValue(product) : product[key];
+}
+
+/**
+ * ¿El producto pasa el filtro? En Condición también se aceptan los valores agrupados anteriores
+ * (NUEVO, PROMO, NORMAL) para que los enlaces guardados (`?condicion=PROMO`) sigan funcionando.
+ */
+function matchesFilter(product: Product, key: FilterKey, values: ReadonlySet<string>): boolean {
+  return values.has(filterValue(product, key)) || (key === 'condition' && values.has(product.condition));
 }
 
 interface IndexedProduct {
@@ -105,7 +113,7 @@ export class CatalogIndex {
     const matches: Product[] = [];
     for (const { product, haystack } of this.entries) {
       if (!tokens.every((t) => haystack.includes(t))) continue;
-      if (!filters.every(([key, values]) => values.has(filterValue(product, key)))) continue;
+      if (!filters.every(([key, values]) => matchesFilter(product, key, values))) continue;
       matches.push(product);
     }
 
@@ -142,6 +150,9 @@ export class CatalogIndex {
         if (value) sets[key].add(value);
       }
     }
-    return Object.fromEntries(FILTER_KEYS.map((k) => [k, [...sets[k]].sort(compareText)])) as Facets;
+    const facets = Object.fromEntries(FILTER_KEYS.map((k) => [k, [...sets[k]].sort(compareText)])) as Facets;
+    // "NO TIENE" (sin condición) al final: las condiciones con significado van primero.
+    facets.condition = [...facets.condition.filter((v) => v !== NO_CONDITION), ...facets.condition.filter((v) => v === NO_CONDITION)];
+    return facets;
   }
 }

@@ -9,6 +9,7 @@ import { EmptyState, ListSkeleton, ProductCards, ProductTable, type ProductItem 
 import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { closeWithTransform, openWithTransform } from '../motion/viewTransition';
+import { SEARCH_SHORTCUT_ARIA } from '../keyboard/searchShortcut';
 
 type Dialog = { kind: 'new' } | { kind: 'rename'; id: string } | { kind: 'delete'; id: string } | { kind: 'edit'; ref: string } | null;
 
@@ -147,7 +148,7 @@ export function FavoritesScreen() {
               {total > 8 && (
                 <label className="search" style={{ height: 32, width: 180 }}>
                   <Icon name="search" size={14} />
-                  <input type="search" aria-label="Buscar en favoritos" placeholder="Buscar en favoritos…" value={search} onChange={(e) => setSearch(e.target.value)} />
+                  <input type="search" aria-label="Buscar en favoritos" aria-keyshortcuts={SEARCH_SHORTCUT_ARIA} data-search-shortcut placeholder="Buscar en favoritos…" value={search} onChange={(e) => setSearch(e.target.value)} />
                 </label>
               )}
               {list && (

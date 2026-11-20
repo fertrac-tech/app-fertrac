@@ -131,7 +131,7 @@ describe('Catálogo (pantalla 03)', () => {
     renderApp();
     await screen.findByRole('list', { name: 'Productos' });
     await userEvent.click(screen.getByRole('button', { name: /^Condición/ }));
-    await userEvent.click(screen.getByRole('option', { name: 'Nuevo' }));
+    await userEvent.click(screen.getByRole('option', { name: 'NUEVO' }));
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(cards().every((c) => within(c).queryByText('NUEVO'))).toBe(true));
     expect(window.location.search).toBe('?condicion=NUEVO');
@@ -518,5 +518,26 @@ describe('Perfil (pantalla 07)', () => {
       expect(await screen.findByRole('button', { name: 'Cambiar a modo oscuro' })).toBeInTheDocument();
       view.unmount();
     }
+  });
+});
+
+describe('Atajo Ctrl + B (buscador)', () => {
+  it('en el catálogo lleva el foco al buscador y selecciona lo escrito', async () => {
+    renderApp({ viewport: 'expanded' });
+    const search = await screen.findByRole<HTMLInputElement>('searchbox', { name: 'Buscar en el catálogo' });
+    await userEvent.type(search, 'filtro');
+    search.blur();
+    await userEvent.keyboard('{Control>}b{/Control}');
+    expect(search).toHaveFocus();
+    expect(search.selectionStart).toBe(0);
+    expect(search.selectionEnd).toBe('filtro'.length);
+    expect(search).toHaveAttribute('aria-keyshortcuts', 'Control+B Meta+B');
+  });
+
+  it('desde Perfil (sin buscador) abre el catálogo con el buscador enfocado', async () => {
+    renderApp({ route: '/perfil', viewport: 'expanded' });
+    await screen.findByRole('heading', { name: 'David Torres' });
+    await userEvent.keyboard('{Control>}b{/Control}');
+    await waitFor(() => expect(screen.getByRole('searchbox', { name: 'Buscar en el catálogo' })).toHaveFocus());
   });
 });
