@@ -1,0 +1,490 @@
+diff --git a/src/domain/consent.ts b/src/domain/consent.ts
+index a6375f5..4770a2f 100644
+--- a/src/domain/consent.ts
++++ b/src/domain/consent.ts
+@@ -3,6 +3,8 @@
+  *
+  * Reglas:
+  * - Sin decisión, la analítica queda DENEGADA: GA4 solo recibe señales sin cookies y sin user_id.
++ * - Aceptar el aviso es REQUISITO de acceso (decisión de negocio): sin aceptación, la sesión
++ *   se detiene en la compuerta de privacidad y no se muestra el catálogo.
+  * - La decisión se guarda en el dispositivo con la versión del aviso. Si el texto cambia
+  *   (nueva versión), se vuelve a preguntar.
+  * - El usuario puede cambiar su decisión cuando quiera desde Perfil.
+diff --git a/src/ui/App.tsx b/src/ui/App.tsx
+index 9d87c27..3dd2f06 100644
+--- a/src/ui/App.tsx
++++ b/src/ui/App.tsx
+@@ -3,15 +3,16 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+ import { Shell } from './layout/Shell';
+ import { CatalogScreen } from './screens/CatalogScreen';
+ import { FavoritesScreen } from './screens/FavoritesScreen';
+-import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
++import { ConsentScreen, DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
+ import { ProfileScreen } from './screens/ProfileScreen';
+ import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
+-import { ConsentBanner } from './components/ConsentBanner';
+-import { ThemeProvider, useAppState, useContainer } from './context';
++import { analyticsGranted } from '@/domain/consent';
++import { ThemeProvider, useAppState, useConsentState, useContainer } from './context';
+ 
+ function Gate() {
+   const { session, favorites, config } = useContainer();
+   const state = useAppState();
++  const consentState = useConsentState();
+   const userEmail = state.status === 'ready' ? state.session.user.email : null;
+   useAnalyticsTracking();
+ 
+@@ -28,6 +29,8 @@ function Gate() {
+   if (state.status === 'loading') screen = <Splash />;
+   else if (state.status === 'signedOut') screen = <LoginScreen state={state} />;
+   else if (state.status === 'blocked') screen = <DeviceScreen state={state} />;
++  // Sin aceptar el aviso de privacidad no hay acceso al catálogo.
++  else if (!analyticsGranted(consentState)) screen = <ConsentScreen email={state.session.user.email} />;
+   else
+     screen = (
+       <Routes>
+@@ -43,7 +46,6 @@ function Gate() {
+   return (
+     <>
+       {screen}
+-      {state.status !== 'loading' && <ConsentBanner />}
+       {config.environmentLabel && <span className="env-badge">{config.environmentLabel}</span>}
+     </>
+   );
+diff --git a/src/ui/analytics/useAnalyticsTracking.ts b/src/ui/analytics/useAnalyticsTracking.ts
+index bddf027..d0107e1 100644
+--- a/src/ui/analytics/useAnalyticsTracking.ts
++++ b/src/ui/analytics/useAnalyticsTracking.ts
+@@ -1,7 +1,8 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useLocation } from 'react-router-dom';
+ import { pseudonymousUserId, screenFromPath } from '@/domain/analytics';
+-import { useAppState, useBreakpoint, useContainer } from '../context';
++import { analyticsGranted } from '@/domain/consent';
++import { useAppState, useBreakpoint, useConsentState, useContainer } from '../context';
+ 
+ /** SHA-256 en hexadecimal con Web Crypto (solo existe en HTTPS, que es como corre la app). */
+ export async function sha256Hex(text: string): Promise<string> {
+@@ -20,6 +21,7 @@ export function useAnalyticsTracking(): void {
+   const breakpoint = useBreakpoint();
+   const { pathname } = useLocation();
+ 
++  const granted = analyticsGranted(useConsentState());
+   const ready = state.status === 'ready';
+   const email = ready ? state.session.user.email : null;
+   const channel = ready ? state.channel : null;
+@@ -64,7 +66,8 @@ export function useAnalyticsTracking(): void {
+   }, [analytics, config.environmentLabel, config.version, email, channel, breakpoint]);
+ 
+   // Una vista por pantalla: cambiar filtros, página o producto (?…) no cuenta como vista nueva.
++  // Mientras se muestra el aviso de privacidad no hay pantalla de la app que medir.
+   useEffect(() => {
+-    if (ready && identified === email) analytics.screen(screen);
+-  }, [analytics, ready, identified, email, screen]);
++    if (ready && granted && identified === email) analytics.screen(screen);
++  }, [analytics, ready, granted, identified, email, screen]);
+ }
+diff --git a/src/ui/components/ConsentBanner.tsx b/src/ui/components/ConsentBanner.tsx
+deleted file mode 100644
+index 177e3f2..0000000
+--- a/src/ui/components/ConsentBanner.tsx
++++ /dev/null
+@@ -1,47 +0,0 @@
+-import { useConsentState, useContainer } from '../context';
+-import { Icon } from './primitives';
+-
+-/** Texto del aviso (BORRADOR: validar con jurídica). Si cambia, sube CONSENT_VERSION en domain/consent.ts. */
+-export const CONSENT_COPY = {
+-  title: 'Privacidad y analítica de uso',
+-  body:
+-    'Con tu autorización, Fertrac usa Google Analytics para medir el uso de esta app (pantallas, búsquedas y productos consultados) y así mejorarla. ' +
+-    'No enviamos tu correo: usamos un identificador seudónimo. Puedes cambiar tu decisión cuando quieras en Perfil.',
+-};
+-
+-export function PrivacyPolicyLink({ className }: { className?: string }) {
+-  const { config } = useContainer();
+-  return config.privacyPolicyUrl ? (
+-    <a className={className} href={config.privacyPolicyUrl} target="_blank" rel="noreferrer">
+-      Ver Política de Protección de Datos
+-    </a>
+-  ) : null;
+-}
+-
+-/**
+- * Aviso de privacidad (reemplaza el banner externo de la v10). No bloquea la app: mientras no haya
+- * decisión, la analítica queda denegada. "Aceptar" y "Rechazar" tienen el mismo peso visual.
+- */
+-export function ConsentBanner() {
+-  const { consent } = useContainer();
+-  const state = useConsentState();
+-  if (state.status !== 'pending') return null;
+-
+-  return (
+-    <section className="consent" role="region" aria-label="Aviso de privacidad">
+-      <h2 className="consent__title">
+-        <Icon name="shield" size={16} /> {CONSENT_COPY.title}
+-      </h2>
+-      <p className="consent__text">{CONSENT_COPY.body}</p>
+-      <PrivacyPolicyLink className="consent__link" />
+-      <div className="consent__actions">
+-        <button type="button" className="btn btn--outline" onClick={() => consent.decide(false)}>
+-          Rechazar
+-        </button>
+-        <button type="button" className="btn btn--primary" onClick={() => consent.decide(true)}>
+-          Aceptar
+-        </button>
+-      </div>
+-    </section>
+-  );
+-}
+diff --git a/src/ui/components/consentCopy.tsx b/src/ui/components/consentCopy.tsx
+new file mode 100644
+index 0000000..db050f8
+--- /dev/null
++++ b/src/ui/components/consentCopy.tsx
+@@ -0,0 +1,23 @@
++import { useContainer } from '../context';
++
++/**
++ * Texto del aviso (BORRADOR: validar con jurídica). Si cambia, sube CONSENT_VERSION en domain/consent.ts
++ * para que todos los usuarios lo acepten de nuevo.
++ */
++export const CONSENT_COPY = {
++  title: 'Aviso de privacidad y analítica de uso',
++  body:
++    'Para usar Lista de Precios debes aceptar que Fertrac mida el uso de la app con Google Analytics (pantallas, búsquedas y productos consultados) para mejorarla. ' +
++    'No enviamos tu correo: usamos un identificador seudónimo. Puedes retirar tu autorización en Perfil; si lo haces, no podrás usar la app hasta aceptarla de nuevo.',
++  deniedTitle: 'Acceso no disponible',
++  deniedBody: 'Rechazaste el aviso de privacidad y analítica de uso, por eso no puedes ingresar.',
++};
++
++export function PrivacyPolicyLink({ className }: { className?: string }) {
++  const { config } = useContainer();
++  return config.privacyPolicyUrl ? (
++    <a className={className} href={config.privacyPolicyUrl} target="_blank" rel="noreferrer">
++      Ver Política de Protección de Datos
++    </a>
++  ) : null;
++}
+diff --git a/src/ui/consent.test.tsx b/src/ui/consent.test.tsx
+index de064f4..dec2d31 100644
+--- a/src/ui/consent.test.tsx
++++ b/src/ui/consent.test.tsx
+@@ -3,64 +3,69 @@ import userEvent from '@testing-library/user-event';
+ import { describe, expect, it } from 'vitest';
+ import { renderApp } from '@/test/harness';
+ 
+-const banner = () => screen.queryByRole('region', { name: 'Aviso de privacidad' });
++const gate = () => screen.queryByRole('region', { name: 'Aviso de privacidad' });
++const consents = (records: { kind: string }[]) => records.filter((r) => r.kind === 'consent');
+ 
+-describe('Aviso de privacidad y analítica (Consent Mode)', () => {
+-  it('sin decisión aparece desde el login, con la política, y no bloquea la app', async () => {
+-    renderApp({ signedIn: false, consent: 'pending', privacyPolicyUrl: 'https://fertrac.com/politica' });
++describe('Aviso de privacidad: requisito de acceso', () => {
++  it('el login no pide el aviso; después de entrar, sin aceptar no hay catálogo', async () => {
++    const { analytics } = renderApp({ signedIn: false, consent: 'pending', privacyPolicyUrl: 'https://fertrac.com/politica' });
+     await screen.findByRole('heading', { name: 'Lista de Precios' });
+-    const notice = banner()!;
+-    expect(notice).toBeInTheDocument();
+-    expect(within(notice).getByText(/No enviamos tu correo/)).toBeInTheDocument();
+-    expect(within(notice).getByRole('link', { name: 'Ver Política de Protección de Datos' })).toHaveAttribute('href', 'https://fertrac.com/politica');
++    expect(gate()).not.toBeInTheDocument();
+ 
+-    // La app sigue usable con el aviso abierto.
+     await userEvent.click(screen.getByRole('button', { name: /Iniciar sesión con Google/ }));
++    const notice = await screen.findByRole('region', { name: 'Aviso de privacidad' });
++    expect(within(notice).getByRole('heading', { name: 'Aviso de privacidad y analítica de uso' })).toBeInTheDocument();
++    expect(within(notice).getByRole('link', { name: 'Ver Política de Protección de Datos' })).toHaveAttribute('href', 'https://fertrac.com/politica');
++    expect(screen.queryByRole('list', { name: 'Productos' })).not.toBeInTheDocument();
++    expect(analytics.screens()).toEqual([]); // sin vistas mientras no hay acceso
++
++    await userEvent.click(within(notice).getByRole('button', { name: 'Aceptar y continuar' }));
+     expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
+-    expect(banner()).toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: true }]);
+   });
+ 
+-  it('"Rechazar" cierra el aviso y deja la analítica denegada', async () => {
++  it('"Rechazar" bloquea el acceso; puede aceptar después o cerrar sesión', async () => {
+     const { analytics } = renderApp({ consent: 'pending' });
+-    await screen.findByRole('list', { name: 'Productos' });
+-    await userEvent.click(within(banner()!).getByRole('button', { name: 'Rechazar' }));
+-    expect(banner()).not.toBeInTheDocument();
+-    expect(analytics.records.filter((r) => r.kind === 'consent')).toEqual([{ kind: 'consent', granted: false }]);
+-  });
++    await userEvent.click(within(await screen.findByRole('region', { name: 'Aviso de privacidad' })).getByRole('button', { name: 'Rechazar' }));
+ 
+-  it('"Aceptar" cierra el aviso y concede la analítica', async () => {
+-    const { analytics } = renderApp({ consent: 'pending' });
+-    await screen.findByRole('list', { name: 'Productos' });
+-    await userEvent.click(within(banner()!).getByRole('button', { name: 'Aceptar' }));
+-    expect(banner()).not.toBeInTheDocument();
+-    expect(analytics.records.filter((r) => r.kind === 'consent')).toEqual([{ kind: 'consent', granted: true }]);
++    const blocked = gate()!;
++    expect(within(blocked).getByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    expect(within(blocked).getByRole('alert')).toHaveTextContent('no puedes ingresar');
++    expect(screen.queryByRole('list', { name: 'Productos' })).not.toBeInTheDocument();
++    expect(within(blocked).queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: false }]);
++
++    await userEvent.click(within(blocked).getByRole('button', { name: 'Aceptar y continuar' }));
++    expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
+   });
+ 
+-  it('con decisión guardada no vuelve a aparecer', async () => {
++  it('con el rechazo guardado, al abrir la app sigue bloqueada y puede cerrar sesión', async () => {
+     renderApp({ consent: 'denied' });
+-    await screen.findByRole('list', { name: 'Productos' });
+-    expect(banner()).not.toBeInTheDocument();
++    const blocked = await screen.findByRole('region', { name: 'Aviso de privacidad' });
++    expect(within(blocked).getByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    await userEvent.click(within(blocked).getByRole('button', { name: 'Cerrar sesión' }));
++    expect(await screen.findByRole('button', { name: /Iniciar sesión con Google/ })).toBeInTheDocument();
+   });
+ 
+-  it('Perfil muestra la decisión con su fecha y permite cambiarla', async () => {
+-    const { analytics } = renderApp({ route: '/perfil', consent: 'denied' });
+-    const privacy = await screen.findByRole('region', { name: 'Privacidad' });
+-    const group = within(privacy).getByRole('group', { name: 'Analítica de uso' });
+-    expect(within(group).getByRole('button', { name: 'No permitir' })).toHaveAttribute('aria-pressed', 'true');
+-
+-    await userEvent.click(within(group).getByRole('button', { name: 'Permitir' }));
+-    expect(within(group).getByRole('button', { name: 'Permitir' })).toHaveAttribute('aria-pressed', 'true');
+-    expect(within(privacy).getByText(/Decisión del/)).toBeInTheDocument();
+-    expect(analytics.records.filter((r) => r.kind === 'consent')).toEqual([{ kind: 'consent', granted: true }]);
++  it('un enlace directo (?ref=, /favoritos) tampoco salta el aviso', async () => {
++    renderApp({ route: '/favoritos', consent: 'pending' });
++    expect(await screen.findByRole('region', { name: 'Aviso de privacidad' })).toBeInTheDocument();
++    expect(screen.queryByRole('heading', { name: /Favoritos/ })).not.toBeInTheDocument();
+   });
+ 
+-  it('desde Perfil se puede decidir aunque el aviso siga abierto', async () => {
+-    renderApp({ route: '/perfil', consent: 'pending' });
++  it('Perfil: muestra la fecha; retirar la autorización pide confirmación y bloquea el acceso', async () => {
++    const { analytics } = renderApp({ route: '/perfil', consent: 'granted' });
+     const privacy = await screen.findByRole('region', { name: 'Privacidad' });
+-    const group = within(privacy).getByRole('group', { name: 'Analítica de uso' });
+-    expect(within(group).getByRole('button', { name: 'Permitir' })).toHaveAttribute('aria-pressed', 'false');
+-    expect(within(group).getByRole('button', { name: 'No permitir' })).toHaveAttribute('aria-pressed', 'false');
+-    await userEvent.click(within(group).getByRole('button', { name: 'No permitir' }));
+-    expect(banner()).not.toBeInTheDocument();
++    expect(within(privacy).getByText(/Autorizada ·/)).toBeInTheDocument();
++
++    await userEvent.click(within(privacy).getByRole('button', { name: 'Retirar autorización' }));
++    const confirm = screen.getByRole('dialog', { name: 'Retirar autorización' });
++    await userEvent.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
++    expect(screen.getByRole('region', { name: 'Privacidad' })).toBeInTheDocument();
++
++    await userEvent.click(within(screen.getByRole('region', { name: 'Privacidad' })).getByRole('button', { name: 'Retirar autorización' }));
++    await userEvent.click(within(screen.getByRole('dialog', { name: 'Retirar autorización' })).getByRole('button', { name: 'Retirar' }));
++    expect(await screen.findByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: false }]);
+   });
+ });
+diff --git a/src/ui/screens/GateScreens.tsx b/src/ui/screens/GateScreens.tsx
+index 1e09fca..9134f96 100644
+--- a/src/ui/screens/GateScreens.tsx
++++ b/src/ui/screens/GateScreens.tsx
+@@ -1,8 +1,9 @@
+ import { useLayoutEffect, useRef, useState } from 'react';
+ import type { AppState } from '@/app/sessionController';
+ import { accessMessage, evaluateAccess } from '@/domain/access';
++import { CONSENT_COPY, PrivacyPolicyLink } from '../components/consentCopy';
+ import { Icon, Logo, ThemeToggle } from '../components/primitives';
+-import { useContainer } from '../context';
++import { useConsentState, useContainer } from '../context';
+ 
+ /** Bloque obligatorio en Login y Dispositivo pendiente (Ley 1581 de 2012). */
+ export function DataProtectionNotice() {
+@@ -118,6 +119,42 @@ export function DeviceScreen({ state }: { state: Extract<AppState, { status: 'bl
+   );
+ }
+ 
++/**
++ * Compuerta de privacidad (después del login): sin aceptar el aviso no se accede al catálogo.
++ * Si el usuario rechazó, se le explica y puede aceptar o cerrar sesión.
++ */
++export function ConsentScreen({ email }: { email: string }) {
++  const { consent, session } = useContainer();
++  const denied = useConsentState().status === 'decided';
++  return (
++    <main className="gate">
++      <div className="gate__theme"><ThemeToggle /></div>
++      <div className="gate__card" role="region" aria-label="Aviso de privacidad">
++        <span className={`gate__status-icon ${denied ? 'gate__status-icon--blocked' : ''}`}>
++          <Icon name={denied ? 'block' : 'shield'} size={32} />
++        </span>
++        <h1 className="gate__title gate__title--sm">{denied ? CONSENT_COPY.deniedTitle : CONSENT_COPY.title}</h1>
++        {denied && <p className="gate__text" role="alert">{CONSENT_COPY.deniedBody}</p>}
++        <p className="gate__text">{CONSENT_COPY.body}</p>
++        <PrivacyPolicyLink className="gate__link" />
++        <button type="button" className="btn btn--primary btn--block" onClick={() => consent.decide(true)}>
++          Aceptar y continuar
++        </button>
++        {denied ? (
++          <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
++            Cerrar sesión
++          </button>
++        ) : (
++          <button type="button" className="btn btn--outline btn--block" onClick={() => consent.decide(false)}>
++            Rechazar
++          </button>
++        )}
++        <p className="gate__text" style={{ fontSize: 12 }}>{email}</p>
++      </div>
++    </main>
++  );
++}
++
+ export function Splash() {
+   return (
+     <div className="splash" role="status" aria-label="Cargando">
+diff --git a/src/ui/screens/ProfileScreen.tsx b/src/ui/screens/ProfileScreen.tsx
+index bcb9e57..2668adf 100644
+--- a/src/ui/screens/ProfileScreen.tsx
++++ b/src/ui/screens/ProfileScreen.tsx
+@@ -2,8 +2,9 @@ import { layerStatuses } from '@/domain/access';
+ import { formatSyncTime } from '@/domain/text';
+ import type { Channel } from '@/ports';
+ import { analyticsGranted } from '@/domain/consent';
+-import { PrivacyPolicyLink } from '../components/ConsentBanner';
+-import { Avatar, HeaderCurve, Icon, Logo } from '../components/primitives';
++import { useState } from 'react';
++import { PrivacyPolicyLink } from '../components/consentCopy';
++import { Avatar, HeaderCurve, Icon, Logo, Sheet } from '../components/primitives';
+ import { useConsentState, useContainer, useReady, useTheme, type Theme } from '../context';
+ 
+ const CHANNEL_LABEL: Record<Channel, string> = {
+@@ -22,6 +23,7 @@ export function ProfileScreen() {
+   const { session, config, consent } = useContainer();
+   const consentState = useConsentState();
+   const granted = analyticsGranted(consentState);
++  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+   const state = useReady();
+   const { theme: activeTheme, setTheme } = useTheme();
+   const { user } = state.session;
+@@ -91,35 +93,45 @@ export function ProfileScreen() {
+           </div>
+         </section>
+ 
+-        <section className="panel" aria-label="Privacidad">
++        <section className="panel profile__privacy" aria-label="Privacidad">
+           <h2>Privacidad</h2>
+           <div className="kv">
+             <span>Analítica de uso</span>
+-            <div className="segmented" role="group" aria-label="Analítica de uso">
+-              <button type="button" aria-pressed={consentState.status === 'decided' && granted} onClick={() => consent.decide(true)}>
+-                Permitir
+-              </button>
+-              <button type="button" aria-pressed={consentState.status === 'decided' && !granted} onClick={() => consent.decide(false)}>
+-                No permitir
+-              </button>
+-            </div>
++            <span data-status={granted ? 'ok' : undefined}>
++              {consentState.status === 'decided' && granted ? `Autorizada · ${formatDecisionDate(consentState.decision.decidedAt)}` : 'Sin autorizar'}
++            </span>
+           </div>
+           <p className="muted profile__note">
+             Google Analytics mide pantallas, búsquedas y productos consultados para mejorar la app, con un identificador seudónimo
+-            (nunca tu correo).
+-            {consentState.status === 'decided' && ` Decisión del ${formatDecisionDate(consentState.decision.decidedAt)}.`}
++            (nunca tu correo). Es requisito para usar la app.
+           </p>
+           <PrivacyPolicyLink className="profile__link" />
++          <button type="button" className="btn btn--outline btn--block" onClick={() => setConfirmWithdraw(true)}>
++            Retirar autorización
++          </button>
+         </section>
+ 
+         <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
+           <Icon name="logout" size={18} /> Cerrar sesión
+         </button>
+       </div>
++      {confirmWithdraw && (
++        <Sheet title="Retirar autorización" onClose={() => setConfirmWithdraw(false)}>
++          <p>Si retiras la autorización de analítica de uso no podrás usar Lista de Precios hasta aceptarla de nuevo.</p>
++          <div className="sheet__actions">
++            <button type="button" className="btn btn--outline" onClick={() => setConfirmWithdraw(false)}>
++              Cancelar
++            </button>
++            <button type="button" className="btn btn--danger" onClick={() => consent.decide(false)}>
++              Retirar
++            </button>
++          </div>
++        </Sheet>
++      )}
+     </div>
+   );
+ }
+ 
+ function formatDecisionDate(epochMs: number): string {
+-  return new Date(epochMs).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
++  return new Date(epochMs).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
+ }
+diff --git a/src/ui/styles/app.css b/src/ui/styles/app.css
+index 6301744..3761ef9 100644
+--- a/src/ui/styles/app.css
++++ b/src/ui/styles/app.css
+@@ -1986,51 +1986,21 @@ p {
+   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
+ }
+ 
+-/* ── Aviso de privacidad propio (reemplaza el banner externo de la v10) ── */
+-.consent {
+-  position: fixed;
+-  z-index: 65; /* sobre barra inferior, riel y detalle; debajo del visor de fotos */
+-  left: calc(12px + var(--safe-left));
+-  right: calc(12px + var(--safe-right));
+-  bottom: calc(12px + var(--safe-bottom));
+-  max-width: 520px;
+-  margin-inline: auto;
+-  display: flex;
+-  flex-direction: column;
+-  gap: 8px;
+-  padding: 16px;
+-  border: 1px solid var(--border-default);
+-  border-radius: var(--radius-lg);
+-  background: var(--bg-surface);
+-  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+-}
+-.consent__title {
+-  display: flex;
+-  align-items: center;
+-  gap: 8px;
+-  font-size: 15px;
+-  font-weight: 700;
+-}
+-.consent__text {
+-  color: var(--text-secondary);
+-  font-size: 13px;
+-  line-height: 1.4;
+-}
+-.consent__link,
++/* ── Aviso de privacidad (compuerta de acceso) ── */
++.gate__link,
+ .profile__link {
+   color: var(--brand-primary-strong);
+   font-size: 13px;
+   font-weight: 600;
+ }
+-.consent__actions {
+-  display: flex;
+-  gap: 8px;
+-  margin-top: 4px;
+-}
+-.consent__actions .btn {
+-  flex: 1; /* mismo peso visual para aceptar y rechazar */
+-}
+ .profile__note {
++  margin-top: 4px;
+   font-size: 12px;
+   line-height: 1.4;
+ }
++.profile__privacy .kv > span:last-child {
++  white-space: nowrap;
++}
++.profile__privacy .btn {
++  margin-top: 12px;
++}
