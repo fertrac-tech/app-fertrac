@@ -1,0 +1,876 @@
+diff --git a/src/adapters/analytics/ga4Analytics.test.ts b/src/adapters/analytics/ga4Analytics.test.ts
+index 017db39..af10ff4 100644
+--- a/src/adapters/analytics/ga4Analytics.test.ts
++++ b/src/adapters/analytics/ga4Analytics.test.ts
+@@ -48,14 +48,48 @@ describe('Ga4Analytics', () => {
+     expect((pageView?.[2] as { page_location: string }).page_location).toBe(`${window.location.origin}/app-fertrac/`);
+   });
+ 
+-  it('identifica con seudónimo y propiedades de usuario', () => {
++  it('con consentimiento identifica con seudónimo y propiedades de usuario', () => {
+     const win = freshWindow();
+-    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win, analyticsConsent: true });
+     ga.identify({ userId: 'abc123', properties: { canal: 'apk_android', vista: 'compact' } });
+     expect(calls(win)).toContainEqual(['set', { user_id: 'abc123' }]);
+     expect(calls(win)).toContainEqual(['set', 'user_properties', { canal: 'apk_android', vista: 'compact' }]);
+   });
+ 
++  it('Consent Mode: el estado por defecto (denegado sin decisión) va antes de config', () => {
++    const win = freshWindow();
++    new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    const commands = calls(win).map(([cmd]) => cmd);
++    expect(commands.indexOf('consent')).toBeLessThan(commands.indexOf('config'));
++    expect(calls(win)[0]).toEqual([
++      'consent',
++      'default',
++      { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied' },
++    ]);
++  });
++
++  it('sin consentimiento no envía user_id; al aceptar lo asocia y al revocar lo quita', () => {
++    const win = freshWindow();
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    ga.identify({ userId: 'abc123', properties: { canal: 'navegador' } });
++    expect(calls(win)).not.toContainEqual(['set', { user_id: 'abc123' }]);
++
++    ga.setConsent(true);
++    ga.setConsent(true); // sin cambio: no repite
++    expect(calls(win).filter(([cmd, type]) => cmd === 'consent' && type === 'update')).toEqual([['consent', 'update', { analytics_storage: 'granted' }]]);
++    expect(calls(win)).toContainEqual(['set', { user_id: 'abc123' }]);
++
++    ga.setConsent(false);
++    expect(calls(win)).toContainEqual(['consent', 'update', { analytics_storage: 'denied' }]);
++    expect(calls(win).at(-1)).toEqual(['set', { user_id: null }]);
++  });
++
++  it('con consentimiento guardado arranca concedido', () => {
++    const win = freshWindow();
++    new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win, analyticsConsent: true });
++    expect((calls(win)[0]?.[2] as Record<string, string>).analytics_storage).toBe('granted');
++  });
++
+   it('envía eventos con su nombre y parámetros', () => {
+     const win = freshWindow();
+     const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
+diff --git a/src/adapters/analytics/ga4Analytics.ts b/src/adapters/analytics/ga4Analytics.ts
+index 5683bb8..58edd0c 100644
+--- a/src/adapters/analytics/ga4Analytics.ts
++++ b/src/adapters/analytics/ga4Analytics.ts
+@@ -8,6 +8,8 @@ export interface Ga4Options {
+   measurementId: string;
+   /** Base de la app (import.meta.env.BASE_URL): arma page_location limpio. */
+   basePath?: string;
++  /** Consentimiento de analítica guardado al arrancar. Sin decisión: false (denegado). */
++  analyticsConsent?: boolean;
+   win?: GtagWindow;
+ }
+ 
+@@ -15,27 +17,43 @@ export const GTAG_SRC = 'https://www.googletagmanager.com/gtag/js';
+ 
+ /**
+  * Adaptador GA4 con gtag.js.
++ * - Consent Mode v2: el estado por defecto se fija ANTES de `config`. Publicidad siempre denegada
++ *   (la app no usa Ads); analítica según el aviso de privacidad propio.
+  * - `send_page_view: false`: la app envía `page_view` solo al cambiar de pantalla (la medición
+  *   mejorada por historial está apagada en GA4, así que filtros y ?ref= no inflan las vistas).
+  * - `page_location` se fija sin parámetros para que ningún evento lleve la búsqueda en la URL.
++ * - `user_id` (seudónimo) solo viaja con consentimiento; al revocarlo se envía null.
+  * - La CSP del build debe permitir googletagmanager.com y google-analytics.com.
+  */
+ export class Ga4Analytics implements Analytics {
+   private readonly gtag: Gtag;
+   private readonly win: GtagWindow;
+   private readonly basePath: string;
++  private granted: boolean;
++  private userId: string | null = null;
+ 
+   constructor(options: Ga4Options) {
+     this.win = options.win ?? (window as GtagWindow);
+     this.basePath = `/${(options.basePath ?? '/').replace(/^\/+|\/+$/g, '')}/`.replace(/\/{2,}/g, '/');
+-    this.gtag = installGtag(this.win, options.measurementId);
++    this.granted = options.analyticsConsent ?? false;
++    this.gtag = installGtag(this.win, options.measurementId, this.granted);
+   }
+ 
+   identify({ userId, properties }: AnalyticsUser): void {
+-    this.gtag('set', { user_id: userId });
++    this.userId = userId;
++    if (this.granted || userId === null) this.gtag('set', { user_id: userId });
+     this.gtag('set', 'user_properties', properties);
+   }
+ 
++  setConsent(analyticsGranted: boolean): void {
++    if (analyticsGranted === this.granted) return;
++    this.granted = analyticsGranted;
++    this.gtag('consent', 'update', { analytics_storage: analyticsGranted ? 'granted' : 'denied' });
++    // Con consentimiento se asocia el seudónimo; al revocarlo se desasocia.
++    if (analyticsGranted && this.userId) this.gtag('set', { user_id: this.userId });
++    if (!analyticsGranted) this.gtag('set', { user_id: null });
++  }
++
+   screen(screen: AnalyticsScreen): void {
+     const page_location = new URL(this.basePath + SCREEN_PATH[screen], this.win.location.origin).href;
+     const page_title = SCREEN_TITLE[screen];
+@@ -50,7 +68,7 @@ export class Ga4Analytics implements Analytics {
+ }
+ 
+ /** Instala gtag una sola vez por ventana (StrictMode y recargas en caliente crean el contenedor dos veces). */
+-function installGtag(win: GtagWindow, measurementId: string): Gtag {
++function installGtag(win: GtagWindow, measurementId: string, analyticsGranted: boolean): Gtag {
+   win.dataLayer = win.dataLayer ?? [];
+   if (!win.gtag) {
+     // gtag.js exige el objeto `arguments`, no un arreglo.
+@@ -58,6 +76,13 @@ function installGtag(win: GtagWindow, measurementId: string): Gtag {
+       // eslint-disable-next-line prefer-rest-params
+       win.dataLayer!.push(arguments);
+     };
++    // Consent Mode: el estado por defecto va antes de cualquier `config` o evento.
++    win.gtag('consent', 'default', {
++      ad_storage: 'denied',
++      ad_user_data: 'denied',
++      ad_personalization: 'denied',
++      analytics_storage: analyticsGranted ? 'granted' : 'denied',
++    });
+     win.gtag('js', new Date());
+   }
+   win.gtag('config', measurementId, { send_page_view: false, page_location: win.location.origin + '/' });
+diff --git a/src/adapters/analytics/memoryAnalytics.ts b/src/adapters/analytics/memoryAnalytics.ts
+index 0906a68..7aa172a 100644
+--- a/src/adapters/analytics/memoryAnalytics.ts
++++ b/src/adapters/analytics/memoryAnalytics.ts
+@@ -4,7 +4,8 @@ import type { Analytics, AnalyticsUser } from '@/ports';
+ export type AnalyticsRecord =
+   | { kind: 'identify'; user: AnalyticsUser }
+   | { kind: 'screen'; screen: AnalyticsScreen }
+-  | { kind: 'event'; event: AnalyticsEvent };
++  | { kind: 'event'; event: AnalyticsEvent }
++  | { kind: 'consent'; granted: boolean };
+ 
+ /** Analítica en memoria: demo, staging sin ID y pruebas. No sale nada del equipo. */
+ export class MemoryAnalytics implements Analytics {
+@@ -22,6 +23,10 @@ export class MemoryAnalytics implements Analytics {
+     this.records.push({ kind: 'event', event });
+   }
+ 
++  setConsent(granted: boolean): void {
++    this.records.push({ kind: 'consent', granted });
++  }
++
+   /** Eventos registrados, opcionalmente filtrados por nombre. */
+   events<N extends AnalyticsEvent['name']>(name?: N): Extract<AnalyticsEvent, { name: N }>[] {
+     return this.records
+diff --git a/src/adapters/storage/localConsentStore.test.ts b/src/adapters/storage/localConsentStore.test.ts
+new file mode 100644
+index 0000000..f1150f9
+--- /dev/null
++++ b/src/adapters/storage/localConsentStore.test.ts
+@@ -0,0 +1,23 @@
++import { LocalConsentStore } from './localConsentStore';
++
++describe('LocalConsentStore', () => {
++  beforeEach(() => window.localStorage.clear());
++
++  it('guarda y lee la decisión', () => {
++    const store = new LocalConsentStore('k');
++    store.save({ analytics: true, version: 1, decidedAt: 5 });
++    expect(store.load()).toEqual({ analytics: true, version: 1, decidedAt: 5 });
++  });
++
++  it('sin dato o con JSON dañado devuelve null', () => {
++    expect(new LocalConsentStore('vacio').load()).toBeNull();
++    window.localStorage.setItem('roto', '{no-json');
++    expect(new LocalConsentStore('roto').load()).toBeNull();
++  });
++
++  it('sin almacenamiento disponible no falla', () => {
++    const store = new LocalConsentStore('k', null);
++    expect(() => store.save({ analytics: false, version: 1, decidedAt: 1 })).not.toThrow();
++    expect(store.load()).toBeNull();
++  });
++});
+diff --git a/src/adapters/storage/localConsentStore.ts b/src/adapters/storage/localConsentStore.ts
+new file mode 100644
+index 0000000..c8661c2
+--- /dev/null
++++ b/src/adapters/storage/localConsentStore.ts
+@@ -0,0 +1,35 @@
++import type { ConsentDecision } from '@/domain/consent';
++import type { ConsentStore } from '@/ports';
++
++/** Decisión de consentimiento en localStorage (por dispositivo y entorno). Sin almacenamiento, no recuerda. */
++export class LocalConsentStore implements ConsentStore {
++  constructor(
++    private readonly key = 'fertrac_v2_consent',
++    private readonly storage: Pick<Storage, 'getItem' | 'setItem'> | null = safeLocalStorage(),
++  ) {}
++
++  load(): unknown {
++    try {
++      const raw = this.storage?.getItem(this.key);
++      return raw ? JSON.parse(raw) : null;
++    } catch {
++      return null;
++    }
++  }
++
++  save(decision: ConsentDecision): void {
++    try {
++      this.storage?.setItem(this.key, JSON.stringify(decision));
++    } catch {
++      /* la decisión solo dura esta sesión */
++    }
++  }
++}
++
++function safeLocalStorage(): Storage | null {
++  try {
++    return window.localStorage;
++  } catch {
++    return null;
++  }
++}
+diff --git a/src/app/consentController.test.ts b/src/app/consentController.test.ts
+new file mode 100644
+index 0000000..b887d5b
+--- /dev/null
++++ b/src/app/consentController.test.ts
+@@ -0,0 +1,48 @@
++import { describe, expect, it, vi } from 'vitest';
++import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
++import { CONSENT_VERSION } from '@/domain/consent';
++import type { ConsentStore } from '@/ports';
++import { ConsentController } from './consentController';
++
++function memoryStore(initial: unknown = null) {
++  let value = initial;
++  const store: ConsentStore = { load: () => value, save: vi.fn((d) => void (value = d)) };
++  return store;
++}
++
++describe('ConsentController', () => {
++  it('sin decisión guardada queda pendiente (el aviso se muestra)', () => {
++    const c = new ConsentController(memoryStore(), new MemoryAnalytics());
++    expect(c.getState()).toEqual({ status: 'pending' });
++  });
++
++  it('respeta la decisión guardada de la versión vigente', () => {
++    const saved = { analytics: false, version: CONSENT_VERSION, decidedAt: 1 };
++    const c = new ConsentController(memoryStore(saved), new MemoryAnalytics());
++    expect(c.getState()).toEqual({ status: 'decided', decision: saved });
++  });
++
++  it('una decisión de otra versión del aviso vuelve a preguntar', () => {
++    const c = new ConsentController(memoryStore({ analytics: true, version: CONSENT_VERSION - 1, decidedAt: 1 }), new MemoryAnalytics());
++    expect(c.getState()).toEqual({ status: 'pending' });
++  });
++
++  it('decidir guarda con fecha, aplica Consent Mode y notifica a la UI', () => {
++    const store = memoryStore();
++    const analytics = new MemoryAnalytics();
++    const c = new ConsentController(store, analytics, () => 1700);
++    const listener = vi.fn();
++    c.subscribe(listener);
++
++    c.decide(true);
++    c.decide(false);
++
++    expect(store.save).toHaveBeenLastCalledWith({ analytics: false, version: CONSENT_VERSION, decidedAt: 1700 });
++    expect(analytics.records).toEqual([
++      { kind: 'consent', granted: true },
++      { kind: 'consent', granted: false },
++    ]);
++    expect(c.getState()).toEqual({ status: 'decided', decision: { analytics: false, version: CONSENT_VERSION, decidedAt: 1700 } });
++    expect(listener).toHaveBeenCalledTimes(2);
++  });
++});
+diff --git a/src/app/consentController.ts b/src/app/consentController.ts
+new file mode 100644
+index 0000000..58c623c
+--- /dev/null
++++ b/src/app/consentController.ts
+@@ -0,0 +1,40 @@
++import { CONSENT_VERSION, consentState, parseConsent, type ConsentDecision, type ConsentState } from '@/domain/consent';
++import type { Analytics, ConsentStore } from '@/ports';
++
++type Listener = () => void;
++
++/** Estado del aviso de privacidad: lee la decisión guardada, la persiste y la aplica a la analítica (Consent Mode). */
++export class ConsentController {
++  private state: ConsentState;
++  private readonly listeners = new Set<Listener>();
++
++  constructor(
++    private readonly store: ConsentStore,
++    private readonly analytics: Pick<Analytics, 'setConsent'>,
++    private readonly now: () => number = Date.now,
++    private readonly version: number = CONSENT_VERSION,
++  ) {
++    this.state = consentState(parseConsent(store.load(), version));
++  }
++
++  /** Decisión guardada al arrancar (la usa el contenedor para el estado por defecto de GA4). */
++  static initialDecision(store: ConsentStore, version = CONSENT_VERSION): ConsentDecision | null {
++    return parseConsent(store.load(), version);
++  }
++
++  getState = (): ConsentState => this.state;
++
++  subscribe = (listener: Listener): (() => void) => {
++    this.listeners.add(listener);
++    return () => this.listeners.delete(listener);
++  };
++
++  /** Aceptar (true) o rechazar (false) la analítica. Se puede cambiar en cualquier momento desde Perfil. */
++  decide = (analytics: boolean): void => {
++    const decision: ConsentDecision = { analytics, version: this.version, decidedAt: this.now() };
++    this.store.save(decision);
++    this.analytics.setConsent(analytics);
++    this.state = consentState(decision);
++    this.listeners.forEach((listener) => listener());
++  };
++}
+diff --git a/src/app/container.ts b/src/app/container.ts
+index 6c848b2..6dabaf7 100644
+--- a/src/app/container.ts
++++ b/src/app/container.ts
+@@ -7,8 +7,10 @@ import { BrowserDeviceIdentity } from '@/adapters/device/browserDeviceIdentity';
+ import { GoogleAuthProvider } from '@/adapters/google/googleAuthProvider';
+ import { MockAuthProvider, MockCatalogSource, MockDeviceIdentity } from '@/adapters/mock/mockAdapters';
+ import { IdbFavoritesRepository, IdbSnapshotStore } from '@/adapters/storage/idbStores';
++import { LocalConsentStore } from '@/adapters/storage/localConsentStore';
+ import type { Analytics, AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
+ import type { AppConfig } from './config';
++import { ConsentController } from './consentController';
+ import { FavoritesController } from './favoritesController';
+ import { SessionController } from './sessionController';
+ 
+@@ -18,6 +20,7 @@ export interface Container {
+   session: SessionController;
+   favorites: FavoritesController;
+   analytics: Analytics;
++  consent: ConsentController;
+ }
+ 
+ /**
+@@ -62,12 +65,16 @@ export function createContainer(config: AppConfig): Container {
+   const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`), Date.now, offlineMaxAgeMs);
+   const session = new SessionController(auth, catalog, device, { offlineMaxAgeMs });
+   holder.session = session;
++  // Aviso de privacidad propio: la decisión guardada fija el estado por defecto de Consent Mode.
++  const consentStore = new LocalConsentStore(`fertrac_v2_consent${suffix}`);
++  const savedConsent = ConsentController.initialDecision(consentStore);
+   // GA4 solo con backend real y un ID válido; la demo nunca envía datos a Google.
+   const analytics: Analytics =
+     config.dataSource === 'appsscript' && config.ga4MeasurementId
+-      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL })
++      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL, analyticsConsent: savedConsent?.analytics ?? false })
+       : new MemoryAnalytics();
++  const consent = new ConsentController(consentStore, analytics);
+   const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`), undefined, analytics);
+ 
+-  return { config, catalog, session, favorites, analytics };
++  return { config, catalog, session, favorites, analytics, consent };
+ }
+diff --git a/src/domain/consent.test.ts b/src/domain/consent.test.ts
+new file mode 100644
+index 0000000..7972f4b
+--- /dev/null
++++ b/src/domain/consent.test.ts
+@@ -0,0 +1,26 @@
++import { analyticsGranted, CONSENT_VERSION, consentState, parseConsent } from './consent';
++
++describe('parseConsent', () => {
++  it('acepta una decisión válida de la versión vigente', () => {
++    expect(parseConsent({ analytics: true, version: CONSENT_VERSION, decidedAt: 1 })).toEqual({ analytics: true, version: CONSENT_VERSION, decidedAt: 1 });
++  });
++
++  it.each([
++    ['nulo', null],
++    ['texto', 'si'],
++    ['sin analytics', { version: CONSENT_VERSION, decidedAt: 1 }],
++    ['analytics no booleano', { analytics: 'true', version: CONSENT_VERSION, decidedAt: 1 }],
++    ['otra versión del aviso', { analytics: true, version: CONSENT_VERSION + 1, decidedAt: 1 }],
++    ['fecha inválida', { analytics: true, version: CONSENT_VERSION, decidedAt: Number.NaN }],
++  ])('%s → sin decisión (se vuelve a preguntar)', (_, raw) => {
++    expect(parseConsent(raw)).toBeNull();
++  });
++});
++
++describe('analyticsGranted', () => {
++  it('solo con aceptación expresa', () => {
++    expect(analyticsGranted(consentState(null))).toBe(false);
++    expect(analyticsGranted(consentState({ analytics: false, version: 1, decidedAt: 1 }))).toBe(false);
++    expect(analyticsGranted(consentState({ analytics: true, version: 1, decidedAt: 1 }))).toBe(true);
++  });
++});
+diff --git a/src/domain/consent.ts b/src/domain/consent.ts
+new file mode 100644
+index 0000000..4770a2f
+--- /dev/null
++++ b/src/domain/consent.ts
+@@ -0,0 +1,40 @@
++/**
++ * Consentimiento de analítica de uso (aviso propio, reemplaza el banner externo de la v10).
++ *
++ * Reglas:
++ * - Sin decisión, la analítica queda DENEGADA: GA4 solo recibe señales sin cookies y sin user_id.
++ * - Aceptar el aviso es REQUISITO de acceso (decisión de negocio): sin aceptación, la sesión
++ *   se detiene en la compuerta de privacidad y no se muestra el catálogo.
++ * - La decisión se guarda en el dispositivo con la versión del aviso. Si el texto cambia
++ *   (nueva versión), se vuelve a preguntar.
++ * - El usuario puede cambiar su decisión cuando quiera desde Perfil.
++ */
++
++/** Sube este número cuando cambie el texto del aviso o el uso de los datos: se vuelve a preguntar. */
++export const CONSENT_VERSION = 1;
++
++export interface ConsentDecision {
++  analytics: boolean;
++  version: number;
++  /** Epoch ms de la decisión (trazabilidad ante una consulta de habeas data). */
++  decidedAt: number;
++}
++
++export type ConsentState = { status: 'pending' } | { status: 'decided'; decision: ConsentDecision };
++
++/** Valida lo guardado en el dispositivo; cualquier dato corrupto o de otra versión cuenta como sin decisión. */
++export function parseConsent(raw: unknown, version = CONSENT_VERSION): ConsentDecision | null {
++  if (!raw || typeof raw !== 'object') return null;
++  const { analytics, version: saved, decidedAt } = raw as Record<string, unknown>;
++  if (typeof analytics !== 'boolean' || saved !== version || typeof decidedAt !== 'number' || !Number.isFinite(decidedAt)) return null;
++  return { analytics, version: saved, decidedAt };
++}
++
++export function consentState(decision: ConsentDecision | null): ConsentState {
++  return decision ? { status: 'decided', decision } : { status: 'pending' };
++}
++
++/** ¿Se puede medir con cookies y user_id? Solo con aceptación expresa. */
++export function analyticsGranted(state: ConsentState): boolean {
++  return state.status === 'decided' && state.decision.analytics;
++}
+diff --git a/src/ports/index.ts b/src/ports/index.ts
+index 4b68f5a..dd0dbf4 100644
+--- a/src/ports/index.ts
++++ b/src/ports/index.ts
+@@ -5,6 +5,7 @@
+  */
+ import type { AccessCode } from '@/domain/access';
+ import type { AnalyticsEvent, AnalyticsScreen } from '@/domain/analytics';
++import type { ConsentDecision } from '@/domain/consent';
+ import type { CatalogPage, CatalogQuery, Facets } from '@/domain/catalogQuery';
+ import type { FavoritesState } from '@/domain/favorites';
+ import type { Product } from '@/domain/product';
+@@ -156,4 +157,12 @@ export interface Analytics {
+   /** Vista de pantalla (Catálogo, Favoritos, Perfil), siempre sin parámetros de URL. */
+   screen(screen: AnalyticsScreen): void;
+   track(event: AnalyticsEvent): void;
++  /** Consent Mode: con `false` no hay cookies de analítica ni user_id (solo señales sin cookies). */
++  setConsent(analyticsGranted: boolean): void;
++}
++
++/** Decisión de consentimiento guardada en el dispositivo. `load` devuelve el dato crudo: lo valida el dominio. */
++export interface ConsentStore {
++  load(): unknown;
++  save(decision: ConsentDecision): void;
+ }
+diff --git a/src/test/harness.tsx b/src/test/harness.tsx
+index d668523..57a4b13 100644
+--- a/src/test/harness.tsx
++++ b/src/test/harness.tsx
+@@ -1,5 +1,7 @@
+ import { render } from '@testing-library/react';
+ import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
++import { ConsentController } from '@/app/consentController';
++import { CONSENT_VERSION } from '@/domain/consent';
+ import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
+ import { MockCatalogSource } from '@/adapters/mock/mockAdapters';
+ import type { Container } from '@/app/container';
+@@ -48,6 +50,8 @@ interface Options {
+   catalogSize?: number;
+   privacyPolicyUrl?: string;
+   systemDark?: boolean;
++  /** Decisión de privacidad guardada; por defecto ya aceptada (el aviso no estorba las demás pruebas). */
++  consent?: 'pending' | 'granted' | 'denied';
+ }
+ 
+ export function renderApp(options: Options = {}) {
+@@ -82,6 +86,9 @@ export function renderApp(options: Options = {}) {
+   const saved = new Map<string, FavoritesState>();
+   let id = 0;
+   const analytics = new MemoryAnalytics();
++  const consentOption = options.consent ?? 'granted';
++  let consentSaved: unknown =
++    consentOption === 'pending' ? null : { analytics: consentOption === 'granted', version: CONSENT_VERSION, decidedAt: 1 };
+   const favorites = new FavoritesController(
+     { load: async (k) => saved.get(k) ?? emptyFavorites(), save: async (k, s) => void saved.set(k, s) },
+     () => `lista-${(id += 1)}`,
+@@ -97,6 +104,11 @@ export function renderApp(options: Options = {}) {
+     session: new SessionController(auth, catalog, device),
+     favorites,
+     analytics,
++    consent: new ConsentController(
++      { load: () => consentSaved, save: (d) => void (consentSaved = d) },
++      analytics,
++      () => 1_700_000_000_000,
++    ),
+   };
+ 
+   const view = render(
+diff --git a/src/ui/App.tsx b/src/ui/App.tsx
+index 40aa58b..3dd2f06 100644
+--- a/src/ui/App.tsx
++++ b/src/ui/App.tsx
+@@ -3,14 +3,16 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+ import { Shell } from './layout/Shell';
+ import { CatalogScreen } from './screens/CatalogScreen';
+ import { FavoritesScreen } from './screens/FavoritesScreen';
+-import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
++import { ConsentScreen, DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
+ import { ProfileScreen } from './screens/ProfileScreen';
+ import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
+-import { ThemeProvider, useAppState, useContainer } from './context';
++import { analyticsGranted } from '@/domain/consent';
++import { ThemeProvider, useAppState, useConsentState, useContainer } from './context';
+ 
+ function Gate() {
+   const { session, favorites, config } = useContainer();
+   const state = useAppState();
++  const consentState = useConsentState();
+   const userEmail = state.status === 'ready' ? state.session.user.email : null;
+   useAnalyticsTracking();
+ 
+@@ -27,6 +29,8 @@ function Gate() {
+   if (state.status === 'loading') screen = <Splash />;
+   else if (state.status === 'signedOut') screen = <LoginScreen state={state} />;
+   else if (state.status === 'blocked') screen = <DeviceScreen state={state} />;
++  // Sin aceptar el aviso de privacidad no hay acceso al catálogo.
++  else if (!analyticsGranted(consentState)) screen = <ConsentScreen email={state.session.user.email} />;
+   else
+     screen = (
+       <Routes>
+diff --git a/src/ui/analytics/useAnalyticsTracking.ts b/src/ui/analytics/useAnalyticsTracking.ts
+index bddf027..d0107e1 100644
+--- a/src/ui/analytics/useAnalyticsTracking.ts
++++ b/src/ui/analytics/useAnalyticsTracking.ts
+@@ -1,7 +1,8 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useLocation } from 'react-router-dom';
+ import { pseudonymousUserId, screenFromPath } from '@/domain/analytics';
+-import { useAppState, useBreakpoint, useContainer } from '../context';
++import { analyticsGranted } from '@/domain/consent';
++import { useAppState, useBreakpoint, useConsentState, useContainer } from '../context';
+ 
+ /** SHA-256 en hexadecimal con Web Crypto (solo existe en HTTPS, que es como corre la app). */
+ export async function sha256Hex(text: string): Promise<string> {
+@@ -20,6 +21,7 @@ export function useAnalyticsTracking(): void {
+   const breakpoint = useBreakpoint();
+   const { pathname } = useLocation();
+ 
++  const granted = analyticsGranted(useConsentState());
+   const ready = state.status === 'ready';
+   const email = ready ? state.session.user.email : null;
+   const channel = ready ? state.channel : null;
+@@ -64,7 +66,8 @@ export function useAnalyticsTracking(): void {
+   }, [analytics, config.environmentLabel, config.version, email, channel, breakpoint]);
+ 
+   // Una vista por pantalla: cambiar filtros, página o producto (?…) no cuenta como vista nueva.
++  // Mientras se muestra el aviso de privacidad no hay pantalla de la app que medir.
+   useEffect(() => {
+-    if (ready && identified === email) analytics.screen(screen);
+-  }, [analytics, ready, identified, email, screen]);
++    if (ready && granted && identified === email) analytics.screen(screen);
++  }, [analytics, ready, granted, identified, email, screen]);
+ }
+diff --git a/src/ui/components/consentCopy.tsx b/src/ui/components/consentCopy.tsx
+new file mode 100644
+index 0000000..db050f8
+--- /dev/null
++++ b/src/ui/components/consentCopy.tsx
+@@ -0,0 +1,23 @@
++import { useContainer } from '../context';
++
++/**
++ * Texto del aviso (BORRADOR: validar con jurídica). Si cambia, sube CONSENT_VERSION en domain/consent.ts
++ * para que todos los usuarios lo acepten de nuevo.
++ */
++export const CONSENT_COPY = {
++  title: 'Aviso de privacidad y analítica de uso',
++  body:
++    'Para usar Lista de Precios debes aceptar que Fertrac mida el uso de la app con Google Analytics (pantallas, búsquedas y productos consultados) para mejorarla. ' +
++    'No enviamos tu correo: usamos un identificador seudónimo. Puedes retirar tu autorización en Perfil; si lo haces, no podrás usar la app hasta aceptarla de nuevo.',
++  deniedTitle: 'Acceso no disponible',
++  deniedBody: 'Rechazaste el aviso de privacidad y analítica de uso, por eso no puedes ingresar.',
++};
++
++export function PrivacyPolicyLink({ className }: { className?: string }) {
++  const { config } = useContainer();
++  return config.privacyPolicyUrl ? (
++    <a className={className} href={config.privacyPolicyUrl} target="_blank" rel="noreferrer">
++      Ver Política de Protección de Datos
++    </a>
++  ) : null;
++}
+diff --git a/src/ui/consent.test.tsx b/src/ui/consent.test.tsx
+new file mode 100644
+index 0000000..dec2d31
+--- /dev/null
++++ b/src/ui/consent.test.tsx
+@@ -0,0 +1,71 @@
++import { screen, within } from '@testing-library/react';
++import userEvent from '@testing-library/user-event';
++import { describe, expect, it } from 'vitest';
++import { renderApp } from '@/test/harness';
++
++const gate = () => screen.queryByRole('region', { name: 'Aviso de privacidad' });
++const consents = (records: { kind: string }[]) => records.filter((r) => r.kind === 'consent');
++
++describe('Aviso de privacidad: requisito de acceso', () => {
++  it('el login no pide el aviso; después de entrar, sin aceptar no hay catálogo', async () => {
++    const { analytics } = renderApp({ signedIn: false, consent: 'pending', privacyPolicyUrl: 'https://fertrac.com/politica' });
++    await screen.findByRole('heading', { name: 'Lista de Precios' });
++    expect(gate()).not.toBeInTheDocument();
++
++    await userEvent.click(screen.getByRole('button', { name: /Iniciar sesión con Google/ }));
++    const notice = await screen.findByRole('region', { name: 'Aviso de privacidad' });
++    expect(within(notice).getByRole('heading', { name: 'Aviso de privacidad y analítica de uso' })).toBeInTheDocument();
++    expect(within(notice).getByRole('link', { name: 'Ver Política de Protección de Datos' })).toHaveAttribute('href', 'https://fertrac.com/politica');
++    expect(screen.queryByRole('list', { name: 'Productos' })).not.toBeInTheDocument();
++    expect(analytics.screens()).toEqual([]); // sin vistas mientras no hay acceso
++
++    await userEvent.click(within(notice).getByRole('button', { name: 'Aceptar y continuar' }));
++    expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: true }]);
++  });
++
++  it('"Rechazar" bloquea el acceso; puede aceptar después o cerrar sesión', async () => {
++    const { analytics } = renderApp({ consent: 'pending' });
++    await userEvent.click(within(await screen.findByRole('region', { name: 'Aviso de privacidad' })).getByRole('button', { name: 'Rechazar' }));
++
++    const blocked = gate()!;
++    expect(within(blocked).getByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    expect(within(blocked).getByRole('alert')).toHaveTextContent('no puedes ingresar');
++    expect(screen.queryByRole('list', { name: 'Productos' })).not.toBeInTheDocument();
++    expect(within(blocked).queryByRole('button', { name: 'Rechazar' })).not.toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: false }]);
++
++    await userEvent.click(within(blocked).getByRole('button', { name: 'Aceptar y continuar' }));
++    expect(await screen.findByRole('list', { name: 'Productos' })).toBeInTheDocument();
++  });
++
++  it('con el rechazo guardado, al abrir la app sigue bloqueada y puede cerrar sesión', async () => {
++    renderApp({ consent: 'denied' });
++    const blocked = await screen.findByRole('region', { name: 'Aviso de privacidad' });
++    expect(within(blocked).getByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    await userEvent.click(within(blocked).getByRole('button', { name: 'Cerrar sesión' }));
++    expect(await screen.findByRole('button', { name: /Iniciar sesión con Google/ })).toBeInTheDocument();
++  });
++
++  it('un enlace directo (?ref=, /favoritos) tampoco salta el aviso', async () => {
++    renderApp({ route: '/favoritos', consent: 'pending' });
++    expect(await screen.findByRole('region', { name: 'Aviso de privacidad' })).toBeInTheDocument();
++    expect(screen.queryByRole('heading', { name: /Favoritos/ })).not.toBeInTheDocument();
++  });
++
++  it('Perfil: muestra la fecha; retirar la autorización pide confirmación y bloquea el acceso', async () => {
++    const { analytics } = renderApp({ route: '/perfil', consent: 'granted' });
++    const privacy = await screen.findByRole('region', { name: 'Privacidad' });
++    expect(within(privacy).getByText(/Autorizada ·/)).toBeInTheDocument();
++
++    await userEvent.click(within(privacy).getByRole('button', { name: 'Retirar autorización' }));
++    const confirm = screen.getByRole('dialog', { name: 'Retirar autorización' });
++    await userEvent.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
++    expect(screen.getByRole('region', { name: 'Privacidad' })).toBeInTheDocument();
++
++    await userEvent.click(within(screen.getByRole('region', { name: 'Privacidad' })).getByRole('button', { name: 'Retirar autorización' }));
++    await userEvent.click(within(screen.getByRole('dialog', { name: 'Retirar autorización' })).getByRole('button', { name: 'Retirar' }));
++    expect(await screen.findByRole('heading', { name: 'Acceso no disponible' })).toBeInTheDocument();
++    expect(consents(analytics.records)).toEqual([{ kind: 'consent', granted: false }]);
++  });
++});
+diff --git a/src/ui/context.tsx b/src/ui/context.tsx
+index 9494f4f..1f89540 100644
+--- a/src/ui/context.tsx
++++ b/src/ui/context.tsx
+@@ -1,6 +1,7 @@
+ import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+ import type { Container } from '@/app/container';
+ import type { AppState } from '@/app/sessionController';
++import type { ConsentState } from '@/domain/consent';
+ import type { FavoritesState } from '@/domain/favorites';
+ 
+ const ContainerContext = createContext<Container | null>(null);
+@@ -34,6 +35,11 @@ export function useFavoritesState(): FavoritesState {
+   return useSyncExternalStore(favorites.subscribe, favorites.getState);
+ }
+ 
++export function useConsentState(): ConsentState {
++  const { consent } = useContainer();
++  return useSyncExternalStore(consent.subscribe, consent.getState);
++}
++
+ // ── Breakpoints del diseño: compacto < 600 · medio 600–1023 · expandido ≥ 1024 ──
+ 
+ export type Breakpoint = 'compact' | 'medium' | 'expanded';
+diff --git a/src/ui/screens/GateScreens.tsx b/src/ui/screens/GateScreens.tsx
+index 1e09fca..9134f96 100644
+--- a/src/ui/screens/GateScreens.tsx
++++ b/src/ui/screens/GateScreens.tsx
+@@ -1,8 +1,9 @@
+ import { useLayoutEffect, useRef, useState } from 'react';
+ import type { AppState } from '@/app/sessionController';
+ import { accessMessage, evaluateAccess } from '@/domain/access';
++import { CONSENT_COPY, PrivacyPolicyLink } from '../components/consentCopy';
+ import { Icon, Logo, ThemeToggle } from '../components/primitives';
+-import { useContainer } from '../context';
++import { useConsentState, useContainer } from '../context';
+ 
+ /** Bloque obligatorio en Login y Dispositivo pendiente (Ley 1581 de 2012). */
+ export function DataProtectionNotice() {
+@@ -118,6 +119,42 @@ export function DeviceScreen({ state }: { state: Extract<AppState, { status: 'bl
+   );
+ }
+ 
++/**
++ * Compuerta de privacidad (después del login): sin aceptar el aviso no se accede al catálogo.
++ * Si el usuario rechazó, se le explica y puede aceptar o cerrar sesión.
++ */
++export function ConsentScreen({ email }: { email: string }) {
++  const { consent, session } = useContainer();
++  const denied = useConsentState().status === 'decided';
++  return (
++    <main className="gate">
++      <div className="gate__theme"><ThemeToggle /></div>
++      <div className="gate__card" role="region" aria-label="Aviso de privacidad">
++        <span className={`gate__status-icon ${denied ? 'gate__status-icon--blocked' : ''}`}>
++          <Icon name={denied ? 'block' : 'shield'} size={32} />
++        </span>
++        <h1 className="gate__title gate__title--sm">{denied ? CONSENT_COPY.deniedTitle : CONSENT_COPY.title}</h1>
++        {denied && <p className="gate__text" role="alert">{CONSENT_COPY.deniedBody}</p>}
++        <p className="gate__text">{CONSENT_COPY.body}</p>
++        <PrivacyPolicyLink className="gate__link" />
++        <button type="button" className="btn btn--primary btn--block" onClick={() => consent.decide(true)}>
++          Aceptar y continuar
++        </button>
++        {denied ? (
++          <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
++            Cerrar sesión
++          </button>
++        ) : (
++          <button type="button" className="btn btn--outline btn--block" onClick={() => consent.decide(false)}>
++            Rechazar
++          </button>
++        )}
++        <p className="gate__text" style={{ fontSize: 12 }}>{email}</p>
++      </div>
++    </main>
++  );
++}
++
+ export function Splash() {
+   return (
+     <div className="splash" role="status" aria-label="Cargando">
+diff --git a/src/ui/screens/ProfileScreen.tsx b/src/ui/screens/ProfileScreen.tsx
+index 30b997d..2668adf 100644
+--- a/src/ui/screens/ProfileScreen.tsx
++++ b/src/ui/screens/ProfileScreen.tsx
+@@ -1,8 +1,11 @@
+ import { layerStatuses } from '@/domain/access';
+ import { formatSyncTime } from '@/domain/text';
+ import type { Channel } from '@/ports';
+-import { Avatar, HeaderCurve, Icon, Logo } from '../components/primitives';
+-import { useContainer, useReady, useTheme, type Theme } from '../context';
++import { analyticsGranted } from '@/domain/consent';
++import { useState } from 'react';
++import { PrivacyPolicyLink } from '../components/consentCopy';
++import { Avatar, HeaderCurve, Icon, Logo, Sheet } from '../components/primitives';
++import { useConsentState, useContainer, useReady, useTheme, type Theme } from '../context';
+ 
+ const CHANNEL_LABEL: Record<Channel, string> = {
+   apk_android: 'App Android',
+@@ -17,7 +20,10 @@ const THEMES: { value: Theme; label: string }[] = [
+ 
+ /** Perfil (pantalla 07): foto, nombre y correo de Google + estado de las tres capas de seguridad. */
+ export function ProfileScreen() {
+-  const { session, config } = useContainer();
++  const { session, config, consent } = useContainer();
++  const consentState = useConsentState();
++  const granted = analyticsGranted(consentState);
++  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
+   const state = useReady();
+   const { theme: activeTheme, setTheme } = useTheme();
+   const { user } = state.session;
+@@ -87,10 +93,45 @@ export function ProfileScreen() {
+           </div>
+         </section>
+ 
++        <section className="panel profile__privacy" aria-label="Privacidad">
++          <h2>Privacidad</h2>
++          <div className="kv">
++            <span>Analítica de uso</span>
++            <span data-status={granted ? 'ok' : undefined}>
++              {consentState.status === 'decided' && granted ? `Autorizada · ${formatDecisionDate(consentState.decision.decidedAt)}` : 'Sin autorizar'}
++            </span>
++          </div>
++          <p className="muted profile__note">
++            Google Analytics mide pantallas, búsquedas y productos consultados para mejorar la app, con un identificador seudónimo
++            (nunca tu correo). Es requisito para usar la app.
++          </p>
++          <PrivacyPolicyLink className="profile__link" />
++          <button type="button" className="btn btn--outline btn--block" onClick={() => setConfirmWithdraw(true)}>
++            Retirar autorización
++          </button>
++        </section>
++
+         <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
+           <Icon name="logout" size={18} /> Cerrar sesión
+         </button>
+       </div>
++      {confirmWithdraw && (
++        <Sheet title="Retirar autorización" onClose={() => setConfirmWithdraw(false)}>
++          <p>Si retiras la autorización de analítica de uso no podrás usar Lista de Precios hasta aceptarla de nuevo.</p>
++          <div className="sheet__actions">
++            <button type="button" className="btn btn--outline" onClick={() => setConfirmWithdraw(false)}>
++              Cancelar
++            </button>
++            <button type="button" className="btn btn--danger" onClick={() => consent.decide(false)}>
++              Retirar
++            </button>
++          </div>
++        </Sheet>
++      )}
+     </div>
+   );
+ }
++
++function formatDecisionDate(epochMs: number): string {
++  return new Date(epochMs).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
++}
+diff --git a/src/ui/styles/app.css b/src/ui/styles/app.css
+index 8e746d4..3761ef9 100644
+--- a/src/ui/styles/app.css
++++ b/src/ui/styles/app.css
+@@ -1985,3 +1985,22 @@ p {
+ .rail__profile[aria-current='page'] .avatar {
+   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
+ }
++
++/* ── Aviso de privacidad (compuerta de acceso) ── */
++.gate__link,
++.profile__link {
++  color: var(--brand-primary-strong);
++  font-size: 13px;
++  font-weight: 600;
++}
++.profile__note {
++  margin-top: 4px;
++  font-size: 12px;
++  line-height: 1.4;
++}
++.profile__privacy .kv > span:last-child {
++  white-space: nowrap;
++}
++.profile__privacy .btn {
++  margin-top: 12px;
++}
