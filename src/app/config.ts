@@ -1,3 +1,5 @@
+import { isMeasurementId } from '@/domain/analytics';
+
 export type DataSource = 'mock' | 'appsscript';
 
 export interface AppConfig {
@@ -11,6 +13,8 @@ export interface AppConfig {
   version: string;
   /** SEC-05: horas que la copia local del catálogo sobrevive sin sincronizar. */
   offlineMaxHours: number;
+  /** ID de medición GA4 (G-…); vacío = analítica en memoria (no sale nada del equipo). */
+  ga4MeasurementId: string;
 }
 
 type Env = Record<string, string | undefined>;
@@ -27,6 +31,7 @@ export function readConfig(env: Env, version: string): AppConfig {
     environmentLabel: env.VITE_ENV_LABEL ?? '',
     version,
     offlineMaxHours: Number(env.VITE_OFFLINE_MAX_HOURS) > 0 ? Number(env.VITE_OFFLINE_MAX_HOURS) : 24,
+    ga4MeasurementId: isMeasurementId(env.VITE_GA4_ID) ? env.VITE_GA4_ID.trim() : '',
   };
   if (dataSource === 'appsscript') {
     const missing = [

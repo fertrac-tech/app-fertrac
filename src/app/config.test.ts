@@ -16,4 +16,9 @@ describe('readConfig', () => {
     expect(() => readConfig({ VITE_DATA_SOURCE: 'appsscript' }, '1')).toThrow(/VITE_APPS_SCRIPT_URL y VITE_GOOGLE_CLIENT_ID/);
     expect(() => readConfig({ VITE_DATA_SOURCE: 'appsscript', VITE_APPS_SCRIPT_URL: 'http://inseguro', VITE_GOOGLE_CLIENT_ID: 'id' }, '1')).toThrow(/VITE_APPS_SCRIPT_URL/);
   });
+  it('GA4: toma el ID de medición válido y apaga la analítica con cualquier otro valor', () => {
+    expect(readConfig({ VITE_GA4_ID: ' G-TR2YESSS1P ' }, '1').ga4MeasurementId).toBe('G-TR2YESSS1P');
+    expect(readConfig({ VITE_GA4_ID: 'GT-WKPPCJV7' }, '1').ga4MeasurementId).toBe('');
+    expect(readConfig({}, '1').ga4MeasurementId).toBe('');
+  });
 });

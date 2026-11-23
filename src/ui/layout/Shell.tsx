@@ -10,15 +10,19 @@ import { Avatar, Icon, Logo, ThemeToggle } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useReady } from '../context';
 
 export function SyncButton({ labelled = false }: { labelled?: boolean }) {
-  const { session } = useContainer();
+  const { session, analytics } = useContainer();
   const state = useReady();
+  const onSync = () => {
+    analytics.track({ name: 'sincronizar' });
+    void session.sync();
+  };
   const icon = <Icon name="refresh" size={labelled ? 18 : 20} className={state.syncing ? 'spin' : ''} />;
   return labelled ? (
-    <button type="button" className="btn btn--outline" disabled={state.syncing} onClick={() => void session.sync()}>
+    <button type="button" className="btn btn--outline" disabled={state.syncing} onClick={onSync}>
       {icon} {state.syncing ? 'Sincronizando…' : 'Sincronizar'}
     </button>
   ) : (
-    <button type="button" className="icon-btn" aria-label="Sincronizar catálogo" disabled={state.syncing} onClick={() => void session.sync()}>
+    <button type="button" className="icon-btn" aria-label="Sincronizar catálogo" disabled={state.syncing} onClick={onSync}>
       {icon}
     </button>
   );

@@ -5,12 +5,14 @@ import { CatalogScreen } from './screens/CatalogScreen';
 import { FavoritesScreen } from './screens/FavoritesScreen';
 import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
 import { ThemeProvider, useAppState, useContainer } from './context';
 
 function Gate() {
   const { session, favorites, config } = useContainer();
   const state = useAppState();
   const userEmail = state.status === 'ready' ? state.session.user.email : null;
+  useAnalyticsTracking();
 
   useEffect(() => {
     void session.start();

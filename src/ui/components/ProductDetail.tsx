@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation } from 'react-router-dom';
 import { nativeMedia } from '@/adapters/device/nativeMedia';
 import { preparePhoto, shareOnWhatsApp } from '@/adapters/device/whatsappShare';
+import { analyticsItem, screenFromPath, type ShareMethod } from '@/domain/analytics';
 import { downloadUrl, withThumbSize } from '@/domain/photo';
 import { shareText } from '@/domain/share';
 import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
 import { Watermark } from './Watermark';
+import { useContainer } from '../context';
 
 interface Props {
   product: Product | undefined;
@@ -102,7 +105,9 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
   const stageRef = useRef<HTMLDivElement>(null);
   const [zoomed, setZoomed] = useState(false);
   const [download, setDownload] = useState<'idle' | 'loading' | 'error'>('idle');
+  const { analytics } = useContainer();
   const onDownload = async () => {
+    analytics.track({ name: 'share', method: 'descargar_foto', content_type: 'producto', item_id: product.ref });
     setDownload('loading');
     setDownload((await downloadImage(src, fileName)) ? 'idle' : 'error');
   };
@@ -209,6 +214,13 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
   const [share, setShare] = useState<{ busy: boolean; notice: string | null }>({ busy: false, notice: null });
   // Foto para compartir, preparada al abrir el detalle (undefined = aún descargando).
   const sharePhoto = useRef<{ ref: string; file: File | null | undefined }>({ ref: '', file: undefined });
+  const { analytics } = useContainer();
+  const origen = screenFromPath(useLocation().pathname);
+  const trackShare = (method: ShareMethod) => product && analytics.track({ name: 'share', method, content_type: 'producto', item_id: product.ref });
+  // Un view_item por producto abierto (cambiar de tamaño o de tema no lo repite).
+  useEffect(() => {
+    if (product) analytics.track({ name: 'view_item', origen, items: [analyticsItem(product)] });
+  }, [product?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     setZoom(false);
     setShare({ busy: false, notice: null });
@@ -221,6 +233,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
   }, [product?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
   const onShare = async () => {
     if (!product) return;
+    trackShare('whatsapp');
     setShare({ busy: true, notice: null });
     const ready = sharePhoto.current.ref === product.ref ? sharePhoto.current.file : undefined;
     const result = await shareOnWhatsApp(product, alias, undefined, ready);
@@ -236,6 +249,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
   };
   const onCopy = async () => {
     if (!product) return;
+    trackShare('copiar_texto');
     try {
       await navigator.clipboard.writeText(shareText(product, alias));
       setShare({ busy: false, notice: 'Texto copiado: nombre, referencia y precio bruto.' });
@@ -245,6 +259,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
   };
   const onDownload = async () => {
     if (!product?.photoUrl) return;
+    trackShare('descargar_foto');
     setShare({ busy: true, notice: null });
     const ok = await downloadImage(withThumbSize(product.photoUrl, 1600), `fertrac-${product.ref.replace(/[^\w.-]+/g, '-')}`);
     setShare({ busy: false, notice: ok ? (nativeMedia() ? 'Foto guardada en la galería, álbum Fertrac.' : 'Foto descargada.') : 'No se pudo descargar la foto.' });
@@ -274,7 +289,10 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
             <div className="detail__hero">
               <div className="detail__photo">
                 {product.photoUrl ? (
-                  <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} onZoom={() => setZoom(true)} />
+                  <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} onZoom={() => {
+                    analytics.track({ name: 'foto_ampliada', item_id: product.ref });
+                    setZoom(true);
+                  }} />
                 ) : (
                   <Icon name="image" size={44} />
                 )}

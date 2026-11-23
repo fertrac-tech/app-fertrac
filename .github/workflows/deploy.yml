@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
         env:
           VITE_PRIVACY_POLICY_URL: ${{ vars.PRIVACY_POLICY_URL }}
+          VITE_GA4_ID: ${{ vars.GA4_MEASUREMENT_ID }}
       - run: echo "app.fertrac.com" > dist/CNAME
       - uses: actions/upload-pages-artifact@v3
         with:

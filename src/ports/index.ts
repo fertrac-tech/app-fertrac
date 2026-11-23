@@ -4,6 +4,7 @@
  * Apps Script a una API en la nube es escribir otro adaptador, no tocar la UI.
  */
 import type { AccessCode } from '@/domain/access';
+import type { AnalyticsEvent, AnalyticsScreen } from '@/domain/analytics';
 import type { CatalogPage, CatalogQuery, Facets } from '@/domain/catalogQuery';
 import type { FavoritesState } from '@/domain/favorites';
 import type { Product } from '@/domain/product';
@@ -138,4 +139,21 @@ export interface DeviceInfo {
 
 export interface DeviceIdentity {
   get(): Promise<DeviceInfo>;
+}
+
+// ── Analítica de uso ─────────────────────────────────────────────────────
+
+export interface AnalyticsUser {
+  /** Seudónimo del usuario (nunca el correo); null al cerrar sesión. */
+  userId: string | null;
+  /** Propiedades de usuario para segmentar: canal, vista, entorno, versión. */
+  properties: Record<string, string>;
+}
+
+/** Medición de uso (GA4 hoy). La UI solo conoce este contrato; la demo y las pruebas usan uno en memoria. */
+export interface Analytics {
+  identify(user: AnalyticsUser): void;
+  /** Vista de pantalla (Catálogo, Favoritos, Perfil), siempre sin parámetros de URL. */
+  screen(screen: AnalyticsScreen): void;
+  track(event: AnalyticsEvent): void;
 }

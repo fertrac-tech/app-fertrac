@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { emptyFavorites, FavoritesError, type FavoritesState } from '@/domain/favorites';
 import type { FavoritesRepository } from '@/ports';
+import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
 import { FavoritesController } from './favoritesController';
 
 function memoryRepo() {
@@ -56,5 +57,29 @@ describe('FavoritesController', () => {
     await c.load('a@fertrac.com');
     expect(() => c.createList('  ')).toThrow(FavoritesError);
     expect(repo.save).not.toHaveBeenCalled();
+  });
+
+  it('mide agregar, editar, quitar y crear listas; un cambio sin efecto no se mide', async () => {
+    const { repo } = memoryRepo();
+    const analytics = new MemoryAnalytics();
+    const c = new FavoritesController(repo, () => 'l1', analytics);
+    await c.load('ana@fertrac.com');
+
+    c.add('AMK-2210');
+    c.add('AMK-2210'); // ya era favorito: sin evento
+    c.createList('Clientes');
+    c.saveFavorite('AMK-2210', 'Amortiguador', ['l1']);
+    c.saveFavorite('XYZ-1', '', []); // nuevo desde la hoja: cuenta como agregado
+    c.toggle('AMK-2210');
+
+    expect(analytics.events().map((e) => e.name)).toEqual([
+      'add_to_wishlist',
+      'lista_creada',
+      'favorito_editado',
+      'add_to_wishlist',
+      'favorito_editado',
+      'favorito_quitado',
+    ]);
+    expect(analytics.events('favorito_editado')[0]).toEqual({ name: 'favorito_editado', item_id: 'AMK-2210', con_alias: true, listas: 1 });
   });
 });

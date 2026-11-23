@@ -1,0 +1,1011 @@
+diff --git a/src/adapters/analytics/ga4Analytics.test.ts b/src/adapters/analytics/ga4Analytics.test.ts
+new file mode 100644
+index 0000000..017db39
+--- /dev/null
++++ b/src/adapters/analytics/ga4Analytics.test.ts
+@@ -0,0 +1,65 @@
++import { Ga4Analytics, GTAG_SRC } from './ga4Analytics';
++
++type TestWindow = Window & { dataLayer?: unknown[]; gtag?: (...args: unknown[]) => void };
++
++/** Llamadas a gtag como arreglos (gtag.js recibe objetos `arguments`). */
++const calls = (win: TestWindow) => (win.dataLayer ?? []).map((entry) => Array.from(entry as ArrayLike<unknown>));
++
++function freshWindow(): TestWindow {
++  const win = window as TestWindow;
++  delete win.dataLayer;
++  delete win.gtag;
++  document.head.querySelectorAll(`script[src^="${GTAG_SRC}"]`).forEach((s) => s.remove());
++  return win;
++}
++
++describe('Ga4Analytics', () => {
++  it('carga gtag.js una sola vez y configura sin page_view automático', () => {
++    const win = freshWindow();
++    new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win }); // StrictMode crea el contenedor dos veces
++
++    expect(document.head.querySelectorAll(`script[src="${GTAG_SRC}?id=G-TR2YESSS1P"]`)).toHaveLength(1);
++    const config = calls(win).filter(([cmd]) => cmd === 'config');
++    expect(config[0]?.[1]).toBe('G-TR2YESSS1P');
++    expect(config[0]?.[2]).toMatchObject({ send_page_view: false });
++    expect(calls(win).filter(([cmd]) => cmd === 'js')).toHaveLength(1);
++    // gtag.js ignora arreglos: cada entrada debe ser un objeto `arguments`.
++    expect(Array.isArray(win.dataLayer?.[0])).toBe(false);
++  });
++
++  it('envía page_view con la URL limpia de la pantalla, sin parámetros', () => {
++    const win = freshWindow();
++    window.history.pushState({}, '', '/favoritos?lista=abc&ref=123');
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', basePath: '/', win });
++    ga.screen('favoritos');
++
++    const pageView = calls(win).find(([cmd, name]) => cmd === 'event' && name === 'page_view');
++    expect(pageView?.[2]).toEqual({ page_location: `${window.location.origin}/favoritos`, page_title: 'Favoritos', pantalla: 'favoritos' });
++    const set = calls(win).find(([cmd, params]) => cmd === 'set' && typeof params === 'object' && params && 'page_location' in params);
++    expect(set?.[1]).toEqual({ page_location: `${window.location.origin}/favoritos`, page_title: 'Favoritos' });
++  });
++
++  it('respeta el basename de la app', () => {
++    const win = freshWindow();
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', basePath: '/app-fertrac/', win });
++    ga.screen('catalogo');
++    const pageView = calls(win).find(([cmd, name]) => cmd === 'event' && name === 'page_view');
++    expect((pageView?.[2] as { page_location: string }).page_location).toBe(`${window.location.origin}/app-fertrac/`);
++  });
++
++  it('identifica con seudónimo y propiedades de usuario', () => {
++    const win = freshWindow();
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    ga.identify({ userId: 'abc123', properties: { canal: 'apk_android', vista: 'compact' } });
++    expect(calls(win)).toContainEqual(['set', { user_id: 'abc123' }]);
++    expect(calls(win)).toContainEqual(['set', 'user_properties', { canal: 'apk_android', vista: 'compact' }]);
++  });
++
++  it('envía eventos con su nombre y parámetros', () => {
++    const win = freshWindow();
++    const ga = new Ga4Analytics({ measurementId: 'G-TR2YESSS1P', win });
++    ga.track({ name: 'share', method: 'whatsapp', content_type: 'producto', item_id: '4089757' });
++    expect(calls(win)).toContainEqual(['event', 'share', { method: 'whatsapp', content_type: 'producto', item_id: '4089757' }]);
++  });
++});
+diff --git a/src/adapters/analytics/ga4Analytics.ts b/src/adapters/analytics/ga4Analytics.ts
+new file mode 100644
+index 0000000..5683bb8
+--- /dev/null
++++ b/src/adapters/analytics/ga4Analytics.ts
+@@ -0,0 +1,74 @@
++import { SCREEN_PATH, SCREEN_TITLE, type AnalyticsEvent, type AnalyticsScreen } from '@/domain/analytics';
++import type { Analytics, AnalyticsUser } from '@/ports';
++
++type Gtag = (...args: unknown[]) => void;
++type GtagWindow = Window & { dataLayer?: unknown[]; gtag?: Gtag };
++
++export interface Ga4Options {
++  measurementId: string;
++  /** Base de la app (import.meta.env.BASE_URL): arma page_location limpio. */
++  basePath?: string;
++  win?: GtagWindow;
++}
++
++export const GTAG_SRC = 'https://www.googletagmanager.com/gtag/js';
++
++/**
++ * Adaptador GA4 con gtag.js.
++ * - `send_page_view: false`: la app envía `page_view` solo al cambiar de pantalla (la medición
++ *   mejorada por historial está apagada en GA4, así que filtros y ?ref= no inflan las vistas).
++ * - `page_location` se fija sin parámetros para que ningún evento lleve la búsqueda en la URL.
++ * - La CSP del build debe permitir googletagmanager.com y google-analytics.com.
++ */
++export class Ga4Analytics implements Analytics {
++  private readonly gtag: Gtag;
++  private readonly win: GtagWindow;
++  private readonly basePath: string;
++
++  constructor(options: Ga4Options) {
++    this.win = options.win ?? (window as GtagWindow);
++    this.basePath = `/${(options.basePath ?? '/').replace(/^\/+|\/+$/g, '')}/`.replace(/\/{2,}/g, '/');
++    this.gtag = installGtag(this.win, options.measurementId);
++  }
++
++  identify({ userId, properties }: AnalyticsUser): void {
++    this.gtag('set', { user_id: userId });
++    this.gtag('set', 'user_properties', properties);
++  }
++
++  screen(screen: AnalyticsScreen): void {
++    const page_location = new URL(this.basePath + SCREEN_PATH[screen], this.win.location.origin).href;
++    const page_title = SCREEN_TITLE[screen];
++    // Los eventos posteriores (view_item, share…) heredan la pantalla limpia.
++    this.gtag('set', { page_location, page_title });
++    this.gtag('event', 'page_view', { page_location, page_title, pantalla: screen });
++  }
++
++  track({ name, ...params }: AnalyticsEvent): void {
++    this.gtag('event', name, params);
++  }
++}
++
++/** Instala gtag una sola vez por ventana (StrictMode y recargas en caliente crean el contenedor dos veces). */
++function installGtag(win: GtagWindow, measurementId: string): Gtag {
++  win.dataLayer = win.dataLayer ?? [];
++  if (!win.gtag) {
++    // gtag.js exige el objeto `arguments`, no un arreglo.
++    win.gtag = function gtag() {
++      // eslint-disable-next-line prefer-rest-params
++      win.dataLayer!.push(arguments);
++    };
++    win.gtag('js', new Date());
++  }
++  win.gtag('config', measurementId, { send_page_view: false, page_location: win.location.origin + '/' });
++
++  const doc = win.document;
++  const src = `${GTAG_SRC}?id=${encodeURIComponent(measurementId)}`;
++  if (!doc.querySelector(`script[src="${src}"]`)) {
++    const script = doc.createElement('script');
++    script.async = true;
++    script.src = src;
++    doc.head.appendChild(script);
++  }
++  return win.gtag;
++}
+diff --git a/src/adapters/analytics/memoryAnalytics.ts b/src/adapters/analytics/memoryAnalytics.ts
+new file mode 100644
+index 0000000..0906a68
+--- /dev/null
++++ b/src/adapters/analytics/memoryAnalytics.ts
+@@ -0,0 +1,36 @@
++import type { AnalyticsEvent, AnalyticsScreen } from '@/domain/analytics';
++import type { Analytics, AnalyticsUser } from '@/ports';
++
++export type AnalyticsRecord =
++  | { kind: 'identify'; user: AnalyticsUser }
++  | { kind: 'screen'; screen: AnalyticsScreen }
++  | { kind: 'event'; event: AnalyticsEvent };
++
++/** Analítica en memoria: demo, staging sin ID y pruebas. No sale nada del equipo. */
++export class MemoryAnalytics implements Analytics {
++  readonly records: AnalyticsRecord[] = [];
++
++  identify(user: AnalyticsUser): void {
++    this.records.push({ kind: 'identify', user });
++  }
++
++  screen(screen: AnalyticsScreen): void {
++    this.records.push({ kind: 'screen', screen });
++  }
++
++  track(event: AnalyticsEvent): void {
++    this.records.push({ kind: 'event', event });
++  }
++
++  /** Eventos registrados, opcionalmente filtrados por nombre. */
++  events<N extends AnalyticsEvent['name']>(name?: N): Extract<AnalyticsEvent, { name: N }>[] {
++    return this.records
++      .filter((r): r is Extract<AnalyticsRecord, { kind: 'event' }> => r.kind === 'event')
++      .map((r) => r.event)
++      .filter((e): e is Extract<AnalyticsEvent, { name: N }> => !name || e.name === name);
++  }
++
++  screens(): AnalyticsScreen[] {
++    return this.records.flatMap((r) => (r.kind === 'screen' ? [r.screen] : []));
++  }
++}
+diff --git a/src/app/config.test.ts b/src/app/config.test.ts
+index c54cd0c..54ad4e3 100644
+--- a/src/app/config.test.ts
++++ b/src/app/config.test.ts
+@@ -16,4 +16,9 @@ describe('readConfig', () => {
+     expect(() => readConfig({ VITE_DATA_SOURCE: 'appsscript' }, '1')).toThrow(/VITE_APPS_SCRIPT_URL y VITE_GOOGLE_CLIENT_ID/);
+     expect(() => readConfig({ VITE_DATA_SOURCE: 'appsscript', VITE_APPS_SCRIPT_URL: 'http://inseguro', VITE_GOOGLE_CLIENT_ID: 'id' }, '1')).toThrow(/VITE_APPS_SCRIPT_URL/);
+   });
++  it('GA4: toma el ID de medición válido y apaga la analítica con cualquier otro valor', () => {
++    expect(readConfig({ VITE_GA4_ID: ' G-TR2YESSS1P ' }, '1').ga4MeasurementId).toBe('G-TR2YESSS1P');
++    expect(readConfig({ VITE_GA4_ID: 'GT-WKPPCJV7' }, '1').ga4MeasurementId).toBe('');
++    expect(readConfig({}, '1').ga4MeasurementId).toBe('');
++  });
+ });
+diff --git a/src/app/config.ts b/src/app/config.ts
+index d9e33f5..ba96857 100644
+--- a/src/app/config.ts
++++ b/src/app/config.ts
+@@ -1,3 +1,5 @@
++import { isMeasurementId } from '@/domain/analytics';
++
+ export type DataSource = 'mock' | 'appsscript';
+ 
+ export interface AppConfig {
+@@ -11,6 +13,8 @@ export interface AppConfig {
+   version: string;
+   /** SEC-05: horas que la copia local del catálogo sobrevive sin sincronizar. */
+   offlineMaxHours: number;
++  /** ID de medición GA4 (G-…); vacío = analítica en memoria (no sale nada del equipo). */
++  ga4MeasurementId: string;
+ }
+ 
+ type Env = Record<string, string | undefined>;
+@@ -27,6 +31,7 @@ export function readConfig(env: Env, version: string): AppConfig {
+     environmentLabel: env.VITE_ENV_LABEL ?? '',
+     version,
+     offlineMaxHours: Number(env.VITE_OFFLINE_MAX_HOURS) > 0 ? Number(env.VITE_OFFLINE_MAX_HOURS) : 24,
++    ga4MeasurementId: isMeasurementId(env.VITE_GA4_ID) ? env.VITE_GA4_ID.trim() : '',
+   };
+   if (dataSource === 'appsscript') {
+     const missing = [
+diff --git a/src/app/container.ts b/src/app/container.ts
+index 1b09dc5..6c848b2 100644
+--- a/src/app/container.ts
++++ b/src/app/container.ts
+@@ -1,3 +1,5 @@
++import { Ga4Analytics } from '@/adapters/analytics/ga4Analytics';
++import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
+ import { AppsScriptCatalogSource } from '@/adapters/appsScript/catalogSource';
+ import { AppsScriptClient } from '@/adapters/appsScript/client';
+ import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
+@@ -5,7 +7,7 @@ import { BrowserDeviceIdentity } from '@/adapters/device/browserDeviceIdentity';
+ import { GoogleAuthProvider } from '@/adapters/google/googleAuthProvider';
+ import { MockAuthProvider, MockCatalogSource, MockDeviceIdentity } from '@/adapters/mock/mockAdapters';
+ import { IdbFavoritesRepository, IdbSnapshotStore } from '@/adapters/storage/idbStores';
+-import type { AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
++import type { Analytics, AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
+ import type { AppConfig } from './config';
+ import { FavoritesController } from './favoritesController';
+ import { SessionController } from './sessionController';
+@@ -15,6 +17,7 @@ export interface Container {
+   catalog: CatalogRepository;
+   session: SessionController;
+   favorites: FavoritesController;
++  analytics: Analytics;
+ }
+ 
+ /**
+@@ -59,7 +62,12 @@ export function createContainer(config: AppConfig): Container {
+   const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`), Date.now, offlineMaxAgeMs);
+   const session = new SessionController(auth, catalog, device, { offlineMaxAgeMs });
+   holder.session = session;
+-  const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`));
++  // GA4 solo con backend real y un ID válido; la demo nunca envía datos a Google.
++  const analytics: Analytics =
++    config.dataSource === 'appsscript' && config.ga4MeasurementId
++      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL })
++      : new MemoryAnalytics();
++  const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`), undefined, analytics);
+ 
+-  return { config, catalog, session, favorites };
++  return { config, catalog, session, favorites, analytics };
+ }
+diff --git a/src/app/favoritesController.test.ts b/src/app/favoritesController.test.ts
+index 01efd27..ce36c19 100644
+--- a/src/app/favoritesController.test.ts
++++ b/src/app/favoritesController.test.ts
+@@ -1,6 +1,7 @@
+ import { describe, expect, it, vi } from 'vitest';
+ import { emptyFavorites, FavoritesError, type FavoritesState } from '@/domain/favorites';
+ import type { FavoritesRepository } from '@/ports';
++import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
+ import { FavoritesController } from './favoritesController';
+ 
+ function memoryRepo() {
+@@ -57,4 +58,28 @@ describe('FavoritesController', () => {
+     expect(() => c.createList('  ')).toThrow(FavoritesError);
+     expect(repo.save).not.toHaveBeenCalled();
+   });
++
++  it('mide agregar, editar, quitar y crear listas; un cambio sin efecto no se mide', async () => {
++    const { repo } = memoryRepo();
++    const analytics = new MemoryAnalytics();
++    const c = new FavoritesController(repo, () => 'l1', analytics);
++    await c.load('ana@fertrac.com');
++
++    c.add('AMK-2210');
++    c.add('AMK-2210'); // ya era favorito: sin evento
++    c.createList('Clientes');
++    c.saveFavorite('AMK-2210', 'Amortiguador', ['l1']);
++    c.saveFavorite('XYZ-1', '', []); // nuevo desde la hoja: cuenta como agregado
++    c.toggle('AMK-2210');
++
++    expect(analytics.events().map((e) => e.name)).toEqual([
++      'add_to_wishlist',
++      'lista_creada',
++      'favorito_editado',
++      'add_to_wishlist',
++      'favorito_editado',
++      'favorito_quitado',
++    ]);
++    expect(analytics.events('favorito_editado')[0]).toEqual({ name: 'favorito_editado', item_id: 'AMK-2210', con_alias: true, listas: 1 });
++  });
+ });
+diff --git a/src/app/favoritesController.ts b/src/app/favoritesController.ts
+index b8e3bb7..4aa8431 100644
+--- a/src/app/favoritesController.ts
++++ b/src/app/favoritesController.ts
+@@ -1,9 +1,11 @@
+ import * as fav from '@/domain/favorites';
+ import type { FavoritesState } from '@/domain/favorites';
+-import type { FavoritesRepository } from '@/ports';
++import type { Analytics, FavoritesRepository } from '@/ports';
+ 
+ type Listener = () => void;
+ 
++const NO_ANALYTICS: Pick<Analytics, 'track'> = { track: () => undefined };
++
+ /** Estado de favoritos del usuario activo: aplica reglas de dominio y persiste cada cambio. */
+ export class FavoritesController {
+   private state: FavoritesState = fav.emptyFavorites();
+@@ -13,6 +15,7 @@ export class FavoritesController {
+   constructor(
+     private readonly repository: FavoritesRepository,
+     private readonly newId: () => string = () => crypto.randomUUID(),
++    private readonly analytics: Pick<Analytics, 'track'> = NO_ANALYTICS,
+   ) {}
+ 
+   getState = (): FavoritesState => this.state;
+@@ -29,29 +32,45 @@ export class FavoritesController {
+     if (this.userKey === userKey) this.set(loaded);
+   }
+ 
+-  toggle = (ref: string) => this.apply((s) => fav.toggleFavorite(s, ref));
+-  add = (ref: string) => this.apply((s) => fav.addFavorite(s, ref));
+-  remove = (ref: string) => this.apply((s) => fav.removeFavorite(s, ref));
++  toggle = (ref: string) => {
++    const wasFavorite = fav.isFavorite(this.state, ref);
++    if (this.apply((s) => fav.toggleFavorite(s, ref))) this.trackFavorite(ref, !wasFavorite);
++  };
++  add = (ref: string) => {
++    if (this.apply((s) => fav.addFavorite(s, ref))) this.trackFavorite(ref, true);
++  };
++  remove = (ref: string) => {
++    if (this.apply((s) => fav.removeFavorite(s, ref))) this.trackFavorite(ref, false);
++  };
+   renameList = (id: string, name: string) => this.apply((s) => fav.renameList(s, id, name));
+   deleteList = (id: string) => this.apply((s) => fav.deleteList(s, id));
+ 
+   /** Crea una lista y devuelve su id. Lanza FavoritesError si el nombre no es válido. */
+   createList(name: string): string {
+     const id = this.newId();
+-    this.apply((s) => fav.createList(s, name, id));
++    if (this.apply((s) => fav.createList(s, name, id))) this.analytics.track({ name: 'lista_creada' });
+     return id;
+   }
+ 
+   /** Guarda alias y listas de un favorito en una sola operación (hoja "Editar favorito"). */
+   saveFavorite(ref: string, alias: string, listIds: readonly string[]): void {
+-    this.apply((s) => fav.setFavoriteLists(fav.setAlias(fav.addFavorite(s, ref), ref, alias), ref, listIds));
++    const wasFavorite = fav.isFavorite(this.state, ref);
++    if (!this.apply((s) => fav.setFavoriteLists(fav.setAlias(fav.addFavorite(s, ref), ref, alias), ref, listIds))) return;
++    if (!wasFavorite) this.trackFavorite(ref, true);
++    this.analytics.track({ name: 'favorito_editado', item_id: ref, con_alias: alias.trim().length > 0, listas: listIds.length });
++  }
++
++  private trackFavorite(ref: string, added: boolean): void {
++    this.analytics.track(added ? { name: 'add_to_wishlist', items: [{ item_id: ref }] } : { name: 'favorito_quitado', item_id: ref });
+   }
+ 
+-  private apply(change: (state: FavoritesState) => FavoritesState): void {
++  /** Aplica el cambio; devuelve false si no cambió nada (no se mide ni se guarda). */
++  private apply(change: (state: FavoritesState) => FavoritesState): boolean {
+     const next = change(this.state);
+-    if (next === this.state) return;
++    if (next === this.state) return false;
+     this.set(next);
+     if (this.userKey) void this.repository.save(this.userKey, next).catch(() => undefined);
++    return true;
+   }
+ 
+   private set(state: FavoritesState): void {
+diff --git a/src/domain/analytics.test.ts b/src/domain/analytics.test.ts
+new file mode 100644
+index 0000000..33c77f9
+--- /dev/null
++++ b/src/domain/analytics.test.ts
+@@ -0,0 +1,65 @@
++import { createHash } from 'node:crypto';
++import { analyticsItem, isMeasurementId, normalizeSearchTerm, pseudonymousUserId, screenFromPath, USER_ID_SALT } from './analytics';
++
++const sha256Hex = async (text: string) => createHash('sha256').update(text).digest('hex');
++
++describe('screenFromPath', () => {
++  it.each([
++    ['/', 'catalogo'],
++    ['', 'catalogo'],
++    ['/favoritos', 'favoritos'],
++    ['/Favoritos/', 'favoritos'],
++    ['/perfil', 'perfil'],
++    ['/otra-cosa', 'catalogo'],
++  ])('%s → %s', (path, screen) => {
++    expect(screenFromPath(path)).toBe(screen);
++  });
++});
++
++describe('analyticsItem', () => {
++  it('usa la referencia como item_id y omite los campos vacíos', () => {
++    expect(analyticsItem({ ref: '4089757', name: 'Filtro aceite', brand: 'MCBEE', category: 'Filtros', subcategory: '' })).toEqual({
++      item_id: '4089757',
++      item_name: 'Filtro aceite',
++      item_brand: 'MCBEE',
++      item_category: 'Filtros',
++    });
++  });
++});
++
++describe('normalizeSearchTerm', () => {
++  it('recorta, une espacios, pasa a minúsculas y limita a 100 caracteres', () => {
++    expect(normalizeSearchTerm('  Filtro   ACEITE ')).toBe('filtro aceite');
++    expect(normalizeSearchTerm('x'.repeat(150))).toHaveLength(100);
++  });
++});
++
++describe('isMeasurementId', () => {
++  it('acepta solo IDs de medición GA4', () => {
++    expect(isMeasurementId('G-TR2YESSS1P')).toBe(true);
++    expect(isMeasurementId('GT-WKPPCJV7')).toBe(false);
++    expect(isMeasurementId('GTM-ABC123')).toBe(false);
++    expect(isMeasurementId('')).toBe(false);
++    expect(isMeasurementId(undefined)).toBe(false);
++  });
++});
++
++describe('pseudonymousUserId', () => {
++  it('es estable, no depende de mayúsculas y nunca contiene el correo', async () => {
++    const a = await pseudonymousUserId('Vendedor@Fertrac.com ', sha256Hex);
++    const b = await pseudonymousUserId('vendedor@fertrac.com', sha256Hex);
++    expect(a).toBe(b);
++    expect(a).toMatch(/^[0-9a-f]{32}$/);
++    expect(a).not.toContain('fertrac');
++  });
++
++  it('usa sal: no coincide con el hash plano del correo', async () => {
++    const plain = (await sha256Hex('vendedor@fertrac.com')).slice(0, 32);
++    expect(await pseudonymousUserId('vendedor@fertrac.com', sha256Hex)).not.toBe(plain);
++    expect(USER_ID_SALT).not.toBe('');
++  });
++
++  it('sin correo devuelve null', async () => {
++    expect(await pseudonymousUserId('  ', sha256Hex)).toBeNull();
++  });
++});
+diff --git a/src/domain/analytics.ts b/src/domain/analytics.ts
+new file mode 100644
+index 0000000..204e950
+--- /dev/null
++++ b/src/domain/analytics.ts
+@@ -0,0 +1,95 @@
++/**
++ * Analítica de uso: catálogo de eventos y reglas puras (sin GA4 ni navegador).
++ *
++ * Reglas de privacidad (Ley 1581 y políticas de Google Analytics):
++ * - Nunca se envía el correo ni el nombre: el usuario viaja como un seudónimo (hash con sal).
++ * - Las URL se envían sin parámetros (?q=, ?ref=, filtros): cada filtro no cuenta como "página".
++ */
++import type { Product } from './product';
++
++/** Pantallas protegidas de la app; son las únicas "páginas" que se reportan. */
++export type AnalyticsScreen = 'catalogo' | 'favoritos' | 'perfil';
++
++export const SCREEN_TITLE: Record<AnalyticsScreen, string> = {
++  catalogo: 'Catálogo',
++  favoritos: 'Favoritos',
++  perfil: 'Perfil',
++};
++
++export const SCREEN_PATH: Record<AnalyticsScreen, string> = {
++  catalogo: '',
++  favoritos: 'favoritos',
++  perfil: 'perfil',
++};
++
++/** Ruta del enrutador (sin basename) → pantalla. Cualquier ruta desconocida redirige al catálogo. */
++export function screenFromPath(pathname: string): AnalyticsScreen {
++  const first = pathname.replace(/^\/+/, '').split('/')[0]?.toLowerCase() ?? '';
++  if (first === 'favoritos') return 'favoritos';
++  if (first === 'perfil') return 'perfil';
++  return 'catalogo';
++}
++
++/** Producto en el formato `items` de GA4 (habilita el informe "Artículos más vistos"). */
++export interface AnalyticsItem {
++  item_id: string;
++  item_name?: string;
++  item_brand?: string;
++  item_category?: string;
++  item_category2?: string;
++}
++
++export function analyticsItem(product: Pick<Product, 'ref' | 'name' | 'brand' | 'category' | 'subcategory'>): AnalyticsItem {
++  const item: AnalyticsItem = { item_id: product.ref };
++  if (product.name) item.item_name = product.name;
++  if (product.brand) item.item_brand = product.brand;
++  if (product.category) item.item_category = product.category;
++  if (product.subcategory) item.item_category2 = product.subcategory;
++  return item;
++}
++
++export type ShareMethod = 'whatsapp' | 'copiar_texto' | 'descargar_foto';
++
++/**
++ * Eventos medidos. Los nombres en inglés son eventos recomendados de GA4 (traen informes listos);
++ * los nombres en español son propios y sus parámetros se registran como dimensiones personalizadas.
++ */
++export type AnalyticsEvent =
++  | { name: 'login'; method: 'google' }
++  | { name: 'search'; search_term: string; resultados: number | null }
++  | { name: 'view_item'; origen: AnalyticsScreen; items: [AnalyticsItem] }
++  | { name: 'share'; method: ShareMethod; content_type: 'producto'; item_id: string }
++  | { name: 'add_to_wishlist'; items: [AnalyticsItem] }
++  | { name: 'filtro_aplicado'; filtro: string; valores: number }
++  | { name: 'filtros_limpiados'; incluye_busqueda: boolean }
++  | { name: 'paginar'; pagina: number }
++  | { name: 'foto_ampliada'; item_id: string }
++  | { name: 'favorito_quitado'; item_id: string }
++  | { name: 'favorito_editado'; item_id: string; con_alias: boolean; listas: number }
++  | { name: 'lista_creada' }
++  | { name: 'sincronizar' };
++
++/** Máximo de caracteres de un término de búsqueda (GA4 corta los parámetros a 100). */
++export const MAX_SEARCH_TERM = 100;
++
++export function normalizeSearchTerm(text: string): string {
++  return text.trim().replace(/\s+/g, ' ').toLocaleLowerCase('es').slice(0, MAX_SEARCH_TERM);
++}
++
++/** ID de medición de GA4 (G-XXXXXXX). Cualquier otro valor deja la analítica apagada. */
++export function isMeasurementId(value: string | undefined): value is string {
++  return typeof value === 'string' && /^G-[A-Z0-9]{6,}$/.test(value.trim());
++}
++
++/** Sal fija de la app: evita que el seudónimo coincida con un hash "plano" del correo. */
++export const USER_ID_SALT = 'fertrac-lista-precios|ga4|v1';
++
++/**
++ * Seudónimo estable del usuario para `user_id` de GA4: SHA-256(sal + correo normalizado), 32 hex.
++ * Permite contar personas (no equipos) entre web y APK sin enviar el correo.
++ */
++export async function pseudonymousUserId(email: string, sha256Hex: (text: string) => Promise<string>): Promise<string | null> {
++  const normalized = email.trim().toLowerCase();
++  if (!normalized) return null;
++  return (await sha256Hex(`${USER_ID_SALT}|${normalized}`)).slice(0, 32);
++}
+diff --git a/src/ports/index.ts b/src/ports/index.ts
+index dc3e580..4b68f5a 100644
+--- a/src/ports/index.ts
++++ b/src/ports/index.ts
+@@ -4,6 +4,7 @@
+  * Apps Script a una API en la nube es escribir otro adaptador, no tocar la UI.
+  */
+ import type { AccessCode } from '@/domain/access';
++import type { AnalyticsEvent, AnalyticsScreen } from '@/domain/analytics';
+ import type { CatalogPage, CatalogQuery, Facets } from '@/domain/catalogQuery';
+ import type { FavoritesState } from '@/domain/favorites';
+ import type { Product } from '@/domain/product';
+@@ -139,3 +140,20 @@ export interface DeviceInfo {
+ export interface DeviceIdentity {
+   get(): Promise<DeviceInfo>;
+ }
++
++// ── Analítica de uso ─────────────────────────────────────────────────────
++
++export interface AnalyticsUser {
++  /** Seudónimo del usuario (nunca el correo); null al cerrar sesión. */
++  userId: string | null;
++  /** Propiedades de usuario para segmentar: canal, vista, entorno, versión. */
++  properties: Record<string, string>;
++}
++
++/** Medición de uso (GA4 hoy). La UI solo conoce este contrato; la demo y las pruebas usan uno en memoria. */
++export interface Analytics {
++  identify(user: AnalyticsUser): void;
++  /** Vista de pantalla (Catálogo, Favoritos, Perfil), siempre sin parámetros de URL. */
++  screen(screen: AnalyticsScreen): void;
++  track(event: AnalyticsEvent): void;
++}
+diff --git a/src/test/harness.tsx b/src/test/harness.tsx
+index 9f50170..d668523 100644
+--- a/src/test/harness.tsx
++++ b/src/test/harness.tsx
+@@ -1,4 +1,5 @@
+ import { render } from '@testing-library/react';
++import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
+ import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
+ import { MockCatalogSource } from '@/adapters/mock/mockAdapters';
+ import type { Container } from '@/app/container';
+@@ -80,19 +81,22 @@ export function renderApp(options: Options = {}) {
+ 
+   const saved = new Map<string, FavoritesState>();
+   let id = 0;
++  const analytics = new MemoryAnalytics();
+   const favorites = new FavoritesController(
+     { load: async (k) => saved.get(k) ?? emptyFavorites(), save: async (k, s) => void saved.set(k, s) },
+     () => `lista-${(id += 1)}`,
++    analytics,
+   );
+ 
+   const container: Container = {
+     config: {
+       dataSource: 'mock', appsScriptUrl: '', googleClientId: '', allowedDomain: 'fertrac.com',
+-      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0', offlineMaxHours: 24,
++      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0', offlineMaxHours: 24, ga4MeasurementId: '',
+     },
+     catalog,
+     session: new SessionController(auth, catalog, device),
+     favorites,
++    analytics,
+   };
+ 
+   const view = render(
+@@ -100,5 +104,5 @@ export function renderApp(options: Options = {}) {
+       <App />
+     </ContainerProvider>,
+   );
+-  return { ...view, container, saved };
++  return { ...view, container, saved, analytics };
+ }
+diff --git a/src/ui/App.tsx b/src/ui/App.tsx
+index aa60939..40aa58b 100644
+--- a/src/ui/App.tsx
++++ b/src/ui/App.tsx
+@@ -5,12 +5,14 @@ import { CatalogScreen } from './screens/CatalogScreen';
+ import { FavoritesScreen } from './screens/FavoritesScreen';
+ import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
+ import { ProfileScreen } from './screens/ProfileScreen';
++import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
+ import { ThemeProvider, useAppState, useContainer } from './context';
+ 
+ function Gate() {
+   const { session, favorites, config } = useContainer();
+   const state = useAppState();
+   const userEmail = state.status === 'ready' ? state.session.user.email : null;
++  useAnalyticsTracking();
+ 
+   useEffect(() => {
+     void session.start();
+diff --git a/src/ui/analytics.test.tsx b/src/ui/analytics.test.tsx
+new file mode 100644
+index 0000000..882a3cf
+--- /dev/null
++++ b/src/ui/analytics.test.tsx
+@@ -0,0 +1,81 @@
++import { screen, waitFor, within } from '@testing-library/react';
++import userEvent from '@testing-library/user-event';
++import { describe, expect, it, vi } from 'vitest';
++import { renderApp } from '@/test/harness';
++
++describe('Analítica de uso (GA4)', () => {
++  it('login: mide el inicio de sesión y se identifica con seudónimo, nunca con el correo', async () => {
++    const { analytics } = renderApp({ signedIn: false });
++    await userEvent.click(await screen.findByRole('button', { name: /Iniciar sesión con Google/ }));
++    await screen.findByRole('list', { name: 'Productos' });
++
++    await waitFor(() => expect(analytics.screens()).toEqual(['catalogo']));
++    expect(analytics.events('login')).toEqual([{ name: 'login', method: 'google' }]);
++    const identify = analytics.records.find((r) => r.kind === 'identify');
++    expect(identify).toMatchObject({ kind: 'identify', user: { properties: { canal: 'navegador', vista: 'compact', entorno: 'produccion', version_app: '11.0.0' } } });
++    expect(JSON.stringify(analytics.records)).not.toContain('usuario@fertrac.com');
++    // La identidad llega antes del primer page_view.
++    expect(analytics.records.findIndex((r) => r.kind === 'identify')).toBeLessThan(analytics.records.findIndex((r) => r.kind === 'screen'));
++  });
++
++  it('una sesión restaurada no cuenta como login; solo los cambios de pantalla son vistas', async () => {
++    const { analytics } = renderApp();
++    await screen.findByRole('list', { name: 'Productos' });
++    await waitFor(() => expect(analytics.screens()).toEqual(['catalogo']));
++    expect(analytics.events('login')).toEqual([]);
++
++    await userEvent.click(screen.getByRole('button', { name: 'Página siguiente' }));
++    await screen.findByText('Mostrando 101–200 de 250');
++    expect(analytics.events('paginar')).toEqual([{ name: 'paginar', pagina: 2 }]);
++
++    await userEvent.click(screen.getByRole('link', { name: /Favoritos/ }));
++    await waitFor(() => expect(analytics.screens()).toEqual(['catalogo', 'favoritos']));
++  });
++
++  it('filtros: mide cuál se usa y cuántos valores; también "Limpiar filtros"', async () => {
++    const { analytics } = renderApp();
++    await screen.findByRole('list', { name: 'Productos' });
++    await userEvent.click(screen.getByRole('button', { name: 'Marca: Todas' }));
++    await userEvent.click(within(screen.getByRole('listbox', { name: 'Marca' })).getByRole('option', { name: 'ORIGINAL' }));
++    await userEvent.keyboard('{Escape}');
++    await userEvent.click(screen.getByRole('button', { name: 'Limpiar filtros · 1' }));
++
++    expect(analytics.events('filtro_aplicado')).toEqual([{ name: 'filtro_aplicado', filtro: 'marca', valores: 1 }]);
++    expect(analytics.events('filtros_limpiados')).toEqual([{ name: 'filtros_limpiados', incluye_busqueda: false }]);
++    expect(analytics.screens()).toEqual(['catalogo']); // filtrar no es una vista nueva
++  });
++
++  it('búsqueda: un solo evento con el término final y sus resultados', async () => {
++    const { analytics } = renderApp();
++    await screen.findByRole('list', { name: 'Productos' });
++    await userEvent.type(screen.getByRole('searchbox', { name: 'Buscar en el catálogo' }), 'Bomba');
++    await waitFor(() => expect(analytics.events('search')).toHaveLength(1), { timeout: 3000 });
++    const [search] = analytics.events('search');
++    expect(search?.search_term).toBe('bomba');
++    expect(search?.resultados).toBeGreaterThan(0);
++  });
++
++  it('detalle: view_item con el producto y la pantalla de origen; compartir y ampliar foto', async () => {
++    const { analytics } = renderApp({ route: '/?ref=AMK-2210' });
++    const detail = await screen.findByRole('complementary', { name: 'Detalle de producto' });
++    await within(detail).findByRole('heading', { name: 'AMK-2210' });
++    expect(analytics.events('view_item')).toEqual([
++      { name: 'view_item', origen: 'catalogo', items: [expect.objectContaining({ item_id: 'AMK-2210', item_name: 'AMORTIGUADOR CABINA T800' })] },
++    ]);
++
++    const writeText = vi.fn().mockResolvedValue(undefined);
++    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
++    await userEvent.click(within(detail).getByRole('button', { name: 'Copiar texto del producto' }));
++    await userEvent.click(within(detail).getByRole('button', { name: 'Ampliar foto' }));
++
++    expect(analytics.events('share')).toEqual([{ name: 'share', method: 'copiar_texto', content_type: 'producto', item_id: 'AMK-2210' }]);
++    expect(analytics.events('foto_ampliada')).toEqual([{ name: 'foto_ampliada', item_id: 'AMK-2210' }]);
++  });
++
++  it('sincronizar se mide desde el botón', async () => {
++    const { analytics } = renderApp({ viewport: 'expanded' });
++    await screen.findByRole('table');
++    await userEvent.click(screen.getAllByRole('button', { name: /Sincronizar/ })[0]!);
++    expect(analytics.events('sincronizar')).toHaveLength(1);
++  });
++});
+diff --git a/src/ui/analytics/useAnalyticsTracking.ts b/src/ui/analytics/useAnalyticsTracking.ts
+new file mode 100644
+index 0000000..bddf027
+--- /dev/null
++++ b/src/ui/analytics/useAnalyticsTracking.ts
+@@ -0,0 +1,70 @@
++import { useEffect, useRef, useState } from 'react';
++import { useLocation } from 'react-router-dom';
++import { pseudonymousUserId, screenFromPath } from '@/domain/analytics';
++import { useAppState, useBreakpoint, useContainer } from '../context';
++
++/** SHA-256 en hexadecimal con Web Crypto (solo existe en HTTPS, que es como corre la app). */
++export async function sha256Hex(text: string): Promise<string> {
++  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
++  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
++}
++
++/**
++ * Medición de sesión: inicio de sesión, identidad (seudónimo + segmentos) y vistas de pantalla.
++ * Va en la compuerta de la app (dentro del router). Las vistas esperan a la identidad para que
++ * el primer page_view ya lleve el user_id.
++ */
++export function useAnalyticsTracking(): void {
++  const { analytics, config } = useContainer();
++  const state = useAppState();
++  const breakpoint = useBreakpoint();
++  const { pathname } = useLocation();
++
++  const ready = state.status === 'ready';
++  const email = ready ? state.session.user.email : null;
++  const channel = ready ? state.channel : null;
++  const screen = screenFromPath(pathname);
++  const [identified, setIdentified] = useState<string | null>(null);
++
++  // Inicio de sesión = llegar al catálogo desde el login o desde "dispositivo pendiente".
++  // Restaurar una sesión guardada al abrir la app no cuenta como login.
++  const previous = useRef(state.status);
++  useEffect(() => {
++    if (state.status === 'ready' && (previous.current === 'signedOut' || previous.current === 'blocked')) {
++      analytics.track({ name: 'login', method: 'google' });
++    }
++    previous.current = state.status;
++  }, [analytics, state.status]);
++
++  useEffect(() => {
++    if (!email) {
++      setIdentified((current) => {
++        if (current) analytics.identify({ userId: null, properties: {} }); // cierre de sesión
++        return null;
++      });
++      return;
++    }
++    let active = true;
++    const properties = {
++      canal: channel ?? 'desconocido',
++      vista: breakpoint,
++      entorno: config.environmentLabel ? config.environmentLabel.toLowerCase() : 'produccion',
++      version_app: config.version,
++    };
++    pseudonymousUserId(email, sha256Hex)
++      .catch(() => null)
++      .then((userId) => {
++        if (!active) return;
++        analytics.identify({ userId, properties });
++        setIdentified(email);
++      });
++    return () => {
++      active = false;
++    };
++  }, [analytics, config.environmentLabel, config.version, email, channel, breakpoint]);
++
++  // Una vista por pantalla: cambiar filtros, página o producto (?…) no cuenta como vista nueva.
++  useEffect(() => {
++    if (ready && identified === email) analytics.screen(screen);
++  }, [analytics, ready, identified, email, screen]);
++}
+diff --git a/src/ui/components/ProductDetail.tsx b/src/ui/components/ProductDetail.tsx
+index 30e9299..8ebaa45 100644
+--- a/src/ui/components/ProductDetail.tsx
++++ b/src/ui/components/ProductDetail.tsx
+@@ -1,13 +1,16 @@
+ import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+ import { createPortal } from 'react-dom';
++import { useLocation } from 'react-router-dom';
+ import { nativeMedia } from '@/adapters/device/nativeMedia';
+ import { preparePhoto, shareOnWhatsApp } from '@/adapters/device/whatsappShare';
++import { analyticsItem, screenFromPath, type ShareMethod } from '@/domain/analytics';
+ import { downloadUrl, withThumbSize } from '@/domain/photo';
+ import { shareText } from '@/domain/share';
+ import type { Product } from '@/domain/product';
+ import { formatPrice } from '@/domain/text';
+ import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
+ import { Watermark } from './Watermark';
++import { useContainer } from '../context';
+ 
+ interface Props {
+   product: Product | undefined;
+@@ -102,7 +105,9 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
+   const stageRef = useRef<HTMLDivElement>(null);
+   const [zoomed, setZoomed] = useState(false);
+   const [download, setDownload] = useState<'idle' | 'loading' | 'error'>('idle');
++  const { analytics } = useContainer();
+   const onDownload = async () => {
++    analytics.track({ name: 'share', method: 'descargar_foto', content_type: 'producto', item_id: product.ref });
+     setDownload('loading');
+     setDownload((await downloadImage(src, fileName)) ? 'idle' : 'error');
+   };
+@@ -209,6 +214,13 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
+   const [share, setShare] = useState<{ busy: boolean; notice: string | null }>({ busy: false, notice: null });
+   // Foto para compartir, preparada al abrir el detalle (undefined = aún descargando).
+   const sharePhoto = useRef<{ ref: string; file: File | null | undefined }>({ ref: '', file: undefined });
++  const { analytics } = useContainer();
++  const origen = screenFromPath(useLocation().pathname);
++  const trackShare = (method: ShareMethod) => product && analytics.track({ name: 'share', method, content_type: 'producto', item_id: product.ref });
++  // Un view_item por producto abierto (cambiar de tamaño o de tema no lo repite).
++  useEffect(() => {
++    if (product) analytics.track({ name: 'view_item', origen, items: [analyticsItem(product)] });
++  }, [product?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+   useEffect(() => {
+     setZoom(false);
+     setShare({ busy: false, notice: null });
+@@ -221,6 +233,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
+   }, [product?.ref]); // eslint-disable-line react-hooks/exhaustive-deps
+   const onShare = async () => {
+     if (!product) return;
++    trackShare('whatsapp');
+     setShare({ busy: true, notice: null });
+     const ready = sharePhoto.current.ref === product.ref ? sharePhoto.current.file : undefined;
+     const result = await shareOnWhatsApp(product, alias, undefined, ready);
+@@ -236,6 +249,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
+   };
+   const onCopy = async () => {
+     if (!product) return;
++    trackShare('copiar_texto');
+     try {
+       await navigator.clipboard.writeText(shareText(product, alias));
+       setShare({ busy: false, notice: 'Texto copiado: nombre, referencia y precio bruto.' });
+@@ -245,6 +259,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
+   };
+   const onDownload = async () => {
+     if (!product?.photoUrl) return;
++    trackShare('descargar_foto');
+     setShare({ busy: true, notice: null });
+     const ok = await downloadImage(withThumbSize(product.photoUrl, 1600), `fertrac-${product.ref.replace(/[^\w.-]+/g, '-')}`);
+     setShare({ busy: false, notice: ok ? (nativeMedia() ? 'Foto guardada en la galería, álbum Fertrac.' : 'Foto descargada.') : 'No se pudo descargar la foto.' });
+@@ -274,7 +289,10 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
+             <div className="detail__hero">
+               <div className="detail__photo">
+                 {product.photoUrl ? (
+-                  <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} onZoom={() => setZoom(true)} />
++                  <DetailPhoto url={product.photoUrl} alt={`Foto de ${product.name}`} onZoom={() => {
++                    analytics.track({ name: 'foto_ampliada', item_id: product.ref });
++                    setZoom(true);
++                  }} />
+                 ) : (
+                   <Icon name="image" size={44} />
+                 )}
+diff --git a/src/ui/layout/Shell.tsx b/src/ui/layout/Shell.tsx
+index 3020405..df3e89f 100644
+--- a/src/ui/layout/Shell.tsx
++++ b/src/ui/layout/Shell.tsx
+@@ -10,15 +10,19 @@ import { Avatar, Icon, Logo, ThemeToggle } from '../components/primitives';
+ import { useBreakpoint, useContainer, useFavoritesState, useReady } from '../context';
+ 
+ export function SyncButton({ labelled = false }: { labelled?: boolean }) {
+-  const { session } = useContainer();
++  const { session, analytics } = useContainer();
+   const state = useReady();
++  const onSync = () => {
++    analytics.track({ name: 'sincronizar' });
++    void session.sync();
++  };
+   const icon = <Icon name="refresh" size={labelled ? 18 : 20} className={state.syncing ? 'spin' : ''} />;
+   return labelled ? (
+-    <button type="button" className="btn btn--outline" disabled={state.syncing} onClick={() => void session.sync()}>
++    <button type="button" className="btn btn--outline" disabled={state.syncing} onClick={onSync}>
+       {icon} {state.syncing ? 'Sincronizando…' : 'Sincronizar'}
+     </button>
+   ) : (
+-    <button type="button" className="icon-btn" aria-label="Sincronizar catálogo" disabled={state.syncing} onClick={() => void session.sync()}>
++    <button type="button" className="icon-btn" aria-label="Sincronizar catálogo" disabled={state.syncing} onClick={onSync}>
+       {icon}
+     </button>
+   );
+diff --git a/src/ui/screens/CatalogScreen.tsx b/src/ui/screens/CatalogScreen.tsx
+index 506f101..604f704 100644
+--- a/src/ui/screens/CatalogScreen.tsx
++++ b/src/ui/screens/CatalogScreen.tsx
+@@ -1,5 +1,6 @@
+ import { useEffect, useRef, useState } from 'react';
+ import { useSearchParams } from 'react-router-dom';
++import { normalizeSearchTerm } from '@/domain/analytics';
+ import { CONDITION_LABEL, FILTER_KEYS, filterValues, type Facets, type FilterKey } from '@/domain/catalogQuery';
+ import { isFavorite } from '@/domain/favorites';
+ import type { Condition } from '@/domain/product';
+@@ -31,6 +32,9 @@ const VISIBLE_FILTERS = FILTER_KEYS.filter((key) => key !== 'line');
+ /** Condición muestra el valor de la hoja tal cual (MAGENTA, NUEVO, NO TIENE…); los enlaces antiguos usan el nombre agrupado. */
+ const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition]?.toLocaleUpperCase('es') ?? value : value);
+ 
++/** Tiempo sin escribir para considerar una búsqueda terminada (el filtro de la URL usa 200 ms). */
++const SEARCH_SETTLE_MS = 1200;
++
+ type SelectedFilters = Partial<Record<FilterKey, string[]>>;
+ 
+ interface FilterChipsProps {
+@@ -69,7 +73,7 @@ function FilterChips({ facets, filters, onChange, onClear }: FilterChipsProps) {
+ }
+ 
+ export function CatalogScreen() {
+-  const { catalog, favorites } = useContainer();
++  const { catalog, favorites, analytics } = useContainer();
+   const { catalogVersion } = useReady();
+   const favoritesState = useFavoritesState();
+   const breakpoint = useBreakpoint();
+@@ -125,12 +129,27 @@ export function CatalogScreen() {
+     container?.scrollTo({ top: 0 });
+   }, [page?.page, text, filtersKey]);
+ 
++  // Búsqueda: se mide el término ya "asentado" (1,2 s sin escribir), con sus resultados.
++  // Las búsquedas sin resultados son la primera fuente de mejoras al catálogo.
++  const totalRef = useRef<number | null>(null);
++  totalRef.current = page?.total ?? null;
++  useEffect(() => {
++    const term = normalizeSearchTerm(text);
++    if (!term) return;
++    const timer = setTimeout(() => analytics.track({ name: 'search', search_term: term, resultados: totalRef.current }), SEARCH_SETTLE_MS);
++    return () => clearTimeout(timer);
++  }, [analytics, text]);
++
+   const fav = (ref: string) => isFavorite(favoritesState, ref);
+   const onFavorite = (ref: string) => (fav(ref) ? setEditing(ref) : favorites.add(ref));
+   const noFilters = Object.fromEntries(FILTER_KEYS.map((k) => [FILTERS[k].param, null]));
+   /** Quita todos los filtros y conserva la búsqueda escrita. */
+-  const clearFilters = () => update({ p: null, ...noFilters });
++  const clearFilters = () => {
++    analytics.track({ name: 'filtros_limpiados', incluye_busqueda: false });
++    update({ p: null, ...noFilters });
++  };
+   const clear = () => {
++    analytics.track({ name: 'filtros_limpiados', incluye_busqueda: true });
+     setDraft('');
+     update({ q: null, p: null, ...noFilters });
+   };
+@@ -175,7 +194,10 @@ export function CatalogScreen() {
+               <FilterChips
+               facets={facets}
+               filters={filters}
+-              onChange={(key, values) => update({ [FILTERS[key].param]: values, p: null })}
++              onChange={(key, values) => {
++                analytics.track({ name: 'filtro_aplicado', filtro: FILTERS[key].param, valores: values.length });
++                update({ [FILTERS[key].param]: values, p: null });
++              }}
+               onClear={clearFilters}
+             />
+               {expanded && (
+@@ -217,7 +239,7 @@ export function CatalogScreen() {
+           <Watermark />
+         </div>
+ 
+-        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => shiftWithAxis(p > pageNumber ? 'next' : 'prev', () => update({ p: p > 1 ? String(p) : null }))} />}
++        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => (analytics.track({ name: 'paginar', pagina: p }), shiftWithAxis(p > pageNumber ? 'next' : 'prev', () => update({ p: p > 1 ? String(p) : null })))} />}
+       </section>
+ 
+       {showDetail && selectedRef && (

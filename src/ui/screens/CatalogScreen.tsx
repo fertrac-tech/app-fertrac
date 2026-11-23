@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { normalizeSearchTerm } from '@/domain/analytics';
 import { CONDITION_LABEL, FILTER_KEYS, filterValues, type Facets, type FilterKey } from '@/domain/catalogQuery';
 import { isFavorite } from '@/domain/favorites';
 import type { Condition } from '@/domain/product';
@@ -30,6 +31,9 @@ const VISIBLE_FILTERS = FILTER_KEYS.filter((key) => key !== 'line');
 
 /** Condición muestra el valor de la hoja tal cual (MAGENTA, NUEVO, NO TIENE…); los enlaces antiguos usan el nombre agrupado. */
 const optionLabel = (key: FilterKey, value: string) => (key === 'condition' ? CONDITION_LABEL[value as Condition]?.toLocaleUpperCase('es') ?? value : value);
+
+/** Tiempo sin escribir para considerar una búsqueda terminada (el filtro de la URL usa 200 ms). */
+const SEARCH_SETTLE_MS = 1200;
 
 type SelectedFilters = Partial<Record<FilterKey, string[]>>;
 
@@ -69,7 +73,7 @@ function FilterChips({ facets, filters, onChange, onClear }: FilterChipsProps) {
 }
 
 export function CatalogScreen() {
-  const { catalog, favorites } = useContainer();
+  const { catalog, favorites, analytics } = useContainer();
   const { catalogVersion } = useReady();
   const favoritesState = useFavoritesState();
   const breakpoint = useBreakpoint();
@@ -125,12 +129,27 @@ export function CatalogScreen() {
     container?.scrollTo({ top: 0 });
   }, [page?.page, text, filtersKey]);
 
+  // Búsqueda: se mide el término ya "asentado" (1,2 s sin escribir), con sus resultados.
+  // Las búsquedas sin resultados son la primera fuente de mejoras al catálogo.
+  const totalRef = useRef<number | null>(null);
+  totalRef.current = page?.total ?? null;
+  useEffect(() => {
+    const term = normalizeSearchTerm(text);
+    if (!term) return;
+    const timer = setTimeout(() => analytics.track({ name: 'search', search_term: term, resultados: totalRef.current }), SEARCH_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [analytics, text]);
+
   const fav = (ref: string) => isFavorite(favoritesState, ref);
   const onFavorite = (ref: string) => (fav(ref) ? setEditing(ref) : favorites.add(ref));
   const noFilters = Object.fromEntries(FILTER_KEYS.map((k) => [FILTERS[k].param, null]));
   /** Quita todos los filtros y conserva la búsqueda escrita. */
-  const clearFilters = () => update({ p: null, ...noFilters });
+  const clearFilters = () => {
+    analytics.track({ name: 'filtros_limpiados', incluye_busqueda: false });
+    update({ p: null, ...noFilters });
+  };
   const clear = () => {
+    analytics.track({ name: 'filtros_limpiados', incluye_busqueda: true });
     setDraft('');
     update({ q: null, p: null, ...noFilters });
   };
@@ -175,7 +194,10 @@ export function CatalogScreen() {
               <FilterChips
               facets={facets}
               filters={filters}
-              onChange={(key, values) => update({ [FILTERS[key].param]: values, p: null })}
+              onChange={(key, values) => {
+                analytics.track({ name: 'filtro_aplicado', filtro: FILTERS[key].param, valores: values.length });
+                update({ [FILTERS[key].param]: values, p: null });
+              }}
               onClear={clearFilters}
             />
               {expanded && (
@@ -217,7 +239,7 @@ export function CatalogScreen() {
           <Watermark />
         </div>
 
-        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => shiftWithAxis(p > pageNumber ? 'next' : 'prev', () => update({ p: p > 1 ? String(p) : null }))} />}
+        {page && page.total > 0 && <PaginationBar info={page} wide={expanded} onPage={(p) => (analytics.track({ name: 'paginar', pagina: p }), shiftWithAxis(p > pageNumber ? 'next' : 'prev', () => update({ p: p > 1 ? String(p) : null })))} />}
       </section>
 
       {showDetail && selectedRef && (

@@ -1,3 +1,5 @@
+import { Ga4Analytics } from '@/adapters/analytics/ga4Analytics';
+import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
 import { AppsScriptCatalogSource } from '@/adapters/appsScript/catalogSource';
 import { AppsScriptClient } from '@/adapters/appsScript/client';
 import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
@@ -5,7 +7,7 @@ import { BrowserDeviceIdentity } from '@/adapters/device/browserDeviceIdentity';
 import { GoogleAuthProvider } from '@/adapters/google/googleAuthProvider';
 import { MockAuthProvider, MockCatalogSource, MockDeviceIdentity } from '@/adapters/mock/mockAdapters';
 import { IdbFavoritesRepository, IdbSnapshotStore } from '@/adapters/storage/idbStores';
-import type { AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
+import type { Analytics, AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
 import type { AppConfig } from './config';
 import { FavoritesController } from './favoritesController';
 import { SessionController } from './sessionController';
@@ -15,6 +17,7 @@ export interface Container {
   catalog: CatalogRepository;
   session: SessionController;
   favorites: FavoritesController;
+  analytics: Analytics;
 }
 
 /**
@@ -59,7 +62,12 @@ export function createContainer(config: AppConfig): Container {
   const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`), Date.now, offlineMaxAgeMs);
   const session = new SessionController(auth, catalog, device, { offlineMaxAgeMs });
   holder.session = session;
-  const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`));
+  // GA4 solo con backend real y un ID válido; la demo nunca envía datos a Google.
+  const analytics: Analytics =
+    config.dataSource === 'appsscript' && config.ga4MeasurementId
+      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL })
+      : new MemoryAnalytics();
+  const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`), undefined, analytics);
 
-  return { config, catalog, session, favorites };
+  return { config, catalog, session, favorites, analytics };
 }

@@ -1,4 +1,5 @@
 import { render } from '@testing-library/react';
+import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
 import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
 import { MockCatalogSource } from '@/adapters/mock/mockAdapters';
 import type { Container } from '@/app/container';
@@ -80,19 +81,22 @@ export function renderApp(options: Options = {}) {
 
   const saved = new Map<string, FavoritesState>();
   let id = 0;
+  const analytics = new MemoryAnalytics();
   const favorites = new FavoritesController(
     { load: async (k) => saved.get(k) ?? emptyFavorites(), save: async (k, s) => void saved.set(k, s) },
     () => `lista-${(id += 1)}`,
+    analytics,
   );
 
   const container: Container = {
     config: {
       dataSource: 'mock', appsScriptUrl: '', googleClientId: '', allowedDomain: 'fertrac.com',
-      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0', offlineMaxHours: 24,
+      privacyPolicyUrl: options.privacyPolicyUrl ?? '', environmentLabel: '', version: '11.0.0', offlineMaxHours: 24, ga4MeasurementId: '',
     },
     catalog,
     session: new SessionController(auth, catalog, device),
     favorites,
+    analytics,
   };
 
   const view = render(
@@ -100,5 +104,5 @@ export function renderApp(options: Options = {}) {
       <App />
     </ContainerProvider>,
   );
-  return { ...view, container, saved };
+  return { ...view, container, saved, analytics };
 }
