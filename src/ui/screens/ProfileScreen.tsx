@@ -2,8 +2,9 @@ import { layerStatuses } from '@/domain/access';
 import { formatSyncTime } from '@/domain/text';
 import type { Channel } from '@/ports';
 import { analyticsGranted } from '@/domain/consent';
-import { PrivacyPolicyLink } from '../components/ConsentBanner';
-import { Avatar, HeaderCurve, Icon, Logo } from '../components/primitives';
+import { useState } from 'react';
+import { PrivacyPolicyLink } from '../components/consentCopy';
+import { Avatar, HeaderCurve, Icon, Logo, Sheet } from '../components/primitives';
 import { useConsentState, useContainer, useReady, useTheme, type Theme } from '../context';
 
 const CHANNEL_LABEL: Record<Channel, string> = {
@@ -22,6 +23,7 @@ export function ProfileScreen() {
   const { session, config, consent } = useContainer();
   const consentState = useConsentState();
   const granted = analyticsGranted(consentState);
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const state = useReady();
   const { theme: activeTheme, setTheme } = useTheme();
   const { user } = state.session;
@@ -91,35 +93,45 @@ export function ProfileScreen() {
           </div>
         </section>
 
-        <section className="panel" aria-label="Privacidad">
+        <section className="panel profile__privacy" aria-label="Privacidad">
           <h2>Privacidad</h2>
           <div className="kv">
             <span>Analítica de uso</span>
-            <div className="segmented" role="group" aria-label="Analítica de uso">
-              <button type="button" aria-pressed={consentState.status === 'decided' && granted} onClick={() => consent.decide(true)}>
-                Permitir
-              </button>
-              <button type="button" aria-pressed={consentState.status === 'decided' && !granted} onClick={() => consent.decide(false)}>
-                No permitir
-              </button>
-            </div>
+            <span data-status={granted ? 'ok' : undefined}>
+              {consentState.status === 'decided' && granted ? `Autorizada · ${formatDecisionDate(consentState.decision.decidedAt)}` : 'Sin autorizar'}
+            </span>
           </div>
           <p className="muted profile__note">
             Google Analytics mide pantallas, búsquedas y productos consultados para mejorar la app, con un identificador seudónimo
-            (nunca tu correo).
-            {consentState.status === 'decided' && ` Decisión del ${formatDecisionDate(consentState.decision.decidedAt)}.`}
+            (nunca tu correo). Es requisito para usar la app.
           </p>
           <PrivacyPolicyLink className="profile__link" />
+          <button type="button" className="btn btn--outline btn--block" onClick={() => setConfirmWithdraw(true)}>
+            Retirar autorización
+          </button>
         </section>
 
         <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
           <Icon name="logout" size={18} /> Cerrar sesión
         </button>
       </div>
+      {confirmWithdraw && (
+        <Sheet title="Retirar autorización" onClose={() => setConfirmWithdraw(false)}>
+          <p>Si retiras la autorización de analítica de uso no podrás usar Lista de Precios hasta aceptarla de nuevo.</p>
+          <div className="sheet__actions">
+            <button type="button" className="btn btn--outline" onClick={() => setConfirmWithdraw(false)}>
+              Cancelar
+            </button>
+            <button type="button" className="btn btn--danger" onClick={() => consent.decide(false)}>
+              Retirar
+            </button>
+          </div>
+        </Sheet>
+      )}
     </div>
   );
 }
 
 function formatDecisionDate(epochMs: number): string {
-  return new Date(epochMs).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(epochMs).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
 }

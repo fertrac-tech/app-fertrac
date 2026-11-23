@@ -3,6 +3,8 @@
  *
  * Reglas:
  * - Sin decisión, la analítica queda DENEGADA: GA4 solo recibe señales sin cookies y sin user_id.
+ * - Aceptar el aviso es REQUISITO de acceso (decisión de negocio): sin aceptación, la sesión
+ *   se detiene en la compuerta de privacidad y no se muestra el catálogo.
  * - La decisión se guarda en el dispositivo con la versión del aviso. Si el texto cambia
  *   (nueva versión), se vuelve a preguntar.
  * - El usuario puede cambiar su decisión cuando quiera desde Perfil.

@@ -3,15 +3,16 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { Shell } from './layout/Shell';
 import { CatalogScreen } from './screens/CatalogScreen';
 import { FavoritesScreen } from './screens/FavoritesScreen';
-import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
+import { ConsentScreen, DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
-import { ConsentBanner } from './components/ConsentBanner';
-import { ThemeProvider, useAppState, useContainer } from './context';
+import { analyticsGranted } from '@/domain/consent';
+import { ThemeProvider, useAppState, useConsentState, useContainer } from './context';
 
 function Gate() {
   const { session, favorites, config } = useContainer();
   const state = useAppState();
+  const consentState = useConsentState();
   const userEmail = state.status === 'ready' ? state.session.user.email : null;
   useAnalyticsTracking();
 
@@ -28,6 +29,8 @@ function Gate() {
   if (state.status === 'loading') screen = <Splash />;
   else if (state.status === 'signedOut') screen = <LoginScreen state={state} />;
   else if (state.status === 'blocked') screen = <DeviceScreen state={state} />;
+  // Sin aceptar el aviso de privacidad no hay acceso al catálogo.
+  else if (!analyticsGranted(consentState)) screen = <ConsentScreen email={state.session.user.email} />;
   else
     screen = (
       <Routes>
@@ -43,7 +46,6 @@ function Gate() {
   return (
     <>
       {screen}
-      {state.status !== 'loading' && <ConsentBanner />}
       {config.environmentLabel && <span className="env-badge">{config.environmentLabel}</span>}
     </>
   );

@@ -1,8 +1,9 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { AppState } from '@/app/sessionController';
 import { accessMessage, evaluateAccess } from '@/domain/access';
+import { CONSENT_COPY, PrivacyPolicyLink } from '../components/consentCopy';
 import { Icon, Logo, ThemeToggle } from '../components/primitives';
-import { useContainer } from '../context';
+import { useConsentState, useContainer } from '../context';
 
 /** Bloque obligatorio en Login y Dispositivo pendiente (Ley 1581 de 2012). */
 export function DataProtectionNotice() {
@@ -113,6 +114,42 @@ export function DeviceScreen({ state }: { state: Extract<AppState, { status: 'bl
         </button>
         <p className="gate__text" style={{ fontSize: 12 }}>{state.session.user.email}</p>
         <DataProtectionNotice />
+      </div>
+    </main>
+  );
+}
+
+/**
+ * Compuerta de privacidad (después del login): sin aceptar el aviso no se accede al catálogo.
+ * Si el usuario rechazó, se le explica y puede aceptar o cerrar sesión.
+ */
+export function ConsentScreen({ email }: { email: string }) {
+  const { consent, session } = useContainer();
+  const denied = useConsentState().status === 'decided';
+  return (
+    <main className="gate">
+      <div className="gate__theme"><ThemeToggle /></div>
+      <div className="gate__card" role="region" aria-label="Aviso de privacidad">
+        <span className={`gate__status-icon ${denied ? 'gate__status-icon--blocked' : ''}`}>
+          <Icon name={denied ? 'block' : 'shield'} size={32} />
+        </span>
+        <h1 className="gate__title gate__title--sm">{denied ? CONSENT_COPY.deniedTitle : CONSENT_COPY.title}</h1>
+        {denied && <p className="gate__text" role="alert">{CONSENT_COPY.deniedBody}</p>}
+        <p className="gate__text">{CONSENT_COPY.body}</p>
+        <PrivacyPolicyLink className="gate__link" />
+        <button type="button" className="btn btn--primary btn--block" onClick={() => consent.decide(true)}>
+          Aceptar y continuar
+        </button>
+        {denied ? (
+          <button type="button" className="btn btn--outline btn--block" onClick={() => void session.signOut()}>
+            Cerrar sesión
+          </button>
+        ) : (
+          <button type="button" className="btn btn--outline btn--block" onClick={() => consent.decide(false)}>
+            Rechazar
+          </button>
+        )}
+        <p className="gate__text" style={{ fontSize: 12 }}>{email}</p>
       </div>
     </main>
   );

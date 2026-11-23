@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { pseudonymousUserId, screenFromPath } from '@/domain/analytics';
-import { useAppState, useBreakpoint, useContainer } from '../context';
+import { analyticsGranted } from '@/domain/consent';
+import { useAppState, useBreakpoint, useConsentState, useContainer } from '../context';
 
 /** SHA-256 en hexadecimal con Web Crypto (solo existe en HTTPS, que es como corre la app). */
 export async function sha256Hex(text: string): Promise<string> {
@@ -20,6 +21,7 @@ export function useAnalyticsTracking(): void {
   const breakpoint = useBreakpoint();
   const { pathname } = useLocation();
 
+  const granted = analyticsGranted(useConsentState());
   const ready = state.status === 'ready';
   const email = ready ? state.session.user.email : null;
   const channel = ready ? state.channel : null;
@@ -64,7 +66,8 @@ export function useAnalyticsTracking(): void {
   }, [analytics, config.environmentLabel, config.version, email, channel, breakpoint]);
 
   // Una vista por pantalla: cambiar filtros, página o producto (?…) no cuenta como vista nueva.
+  // Mientras se muestra el aviso de privacidad no hay pantalla de la app que medir.
   useEffect(() => {
-    if (ready && identified === email) analytics.screen(screen);
-  }, [analytics, ready, identified, email, screen]);
+    if (ready && granted && identified === email) analytics.screen(screen);
+  }, [analytics, ready, granted, identified, email, screen]);
 }
