@@ -281,12 +281,11 @@ describe('Detalle (pantalla 04) y trazabilidad de marca', () => {
     // Foco contenido: varias tabulaciones no salen del diálogo.
     for (let i = 0; i < 5; i += 1) await userEvent.tab();
     expect(dialog.contains(document.activeElement)).toBe(true);
-    // Tocar la foto ya no cierra: doble clic alterna el zoom.
-    const img = within(dialog).getByRole('img');
-    await userEvent.click(img);
+    // Zoom con controles visibles (opción 2): usar la barra no cierra el visor.
+    expect(within(dialog).getByText(/Pellizca, doble toque o usa \+ \/ − para acercar/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Alejar' })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Acercar' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    await userEvent.dblClick(img);
-    expect(within(dialog).getByText('Doble toque para alejar')).toBeInTheDocument();
     // "Atrás" del sistema cierra el visor y conserva el detalle.
     window.history.back();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

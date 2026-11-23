@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { nativeMedia } from '@/adapters/device/nativeMedia';
@@ -10,6 +10,7 @@ import type { Product } from '@/domain/product';
 import { formatPrice } from '@/domain/text';
 import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './primitives';
 import { Watermark } from './Watermark';
+import { ZoomableImage, isZoomed } from './ZoomableImage';
 import { useContainer } from '../context';
 
 interface Props {
@@ -95,14 +96,14 @@ let pendingHistoryBack: number | undefined;
  * Visor de foto · "Isla de vidrio con ficha" (Material 3: bottom sheet en móvil y panel lateral
  * en escritorio; Apple HIG: modal de medios con zoom por gesto; Fluent 2: foco contenido).
  * - Cierra con Escape, el botón, tocando el velo o con "Atrás" del sistema (entrada de historial).
- * - Doble toque / doble clic alterna el zoom 2× (desplazable); tocar la foto ya no la cierra.
+ * - Zoom (opción 2): pellizcar, doble toque/clic (100 % ↔ 250 %), rueda, arrastrar y barra − / + / 1:1
+ *   (`ZoomableImage`, react-zoom-pan-pinch). Tocar la foto no la cierra; tocar fuera sin zoom sí.
  * - Tab y Shift+Tab quedan dentro del diálogo.
  */
 function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; alt: string; fileName: string; product: Product; onClose: () => void }) {
   const { src, onError } = useDriveImage(url, 1600);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
   const [zoomed, setZoomed] = useState(false);
   const [download, setDownload] = useState<'idle' | 'loading' | 'error'>('idle');
   const { analytics } = useContainer();
@@ -146,21 +147,6 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
     };
   }, []);
 
-  const toggleZoom = (event: ReactMouseEvent<HTMLImageElement>) => {
-    const stage = stageRef.current;
-    const img = event.currentTarget;
-    const rect = img.getBoundingClientRect();
-    const fx = rect.width ? (event.clientX - rect.left) / rect.width : 0.5;
-    const fy = rect.height ? (event.clientY - rect.top) / rect.height : 0.5;
-    setZoomed((z) => {
-      if (!z && stage) requestAnimationFrame(() => {
-        stage.scrollLeft = fx * stage.scrollWidth - stage.clientWidth / 2;
-        stage.scrollTop = fy * stage.scrollHeight - stage.clientHeight / 2;
-      });
-      return !z;
-    });
-  };
-
   const titleId = 'lightbox-title';
   return createPortal(
     <div
@@ -171,8 +157,8 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
       aria-label={alt}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div ref={stageRef} className={`lightbox__stage ${zoomed ? 'lightbox__stage--zoomed' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-        <img src={src} alt={alt} referrerPolicy="no-referrer" onError={onError} onDoubleClick={toggleZoom} draggable={false} />
+      <div className="lightbox__stage" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+        <ZoomableImage src={src} alt={alt} onError={onError} onScaleChange={(s) => setZoomed(isZoomed(s))} onBackdropClick={onClose} />
       </div>
       <button ref={closeRef} type="button" className="icon-btn lightbox__close" aria-label="Cerrar foto" title="Cerrar" onClick={onClose}>
         <Icon name="close" size={22} />
@@ -198,7 +184,7 @@ function PhotoDialog({ url, alt, fileName, product, onClose }: { url: string; al
         {download === 'error' && (
           <p className="lightbox__hint lightbox__hint--error" role="alert">No se pudo descargar la foto. Intenta de nuevo.</p>
         )}
-        <p className="lightbox__hint">{zoomed ? 'Doble toque para alejar' : 'Doble toque para acercar'}</p>
+        <p className="lightbox__hint">{zoomed ? 'Arrastra para mover · doble toque o 1:1 para volver' : 'Pellizca, doble toque o usa + / − para acercar'}</p>
       </aside>
     </div>,
     document.body,
