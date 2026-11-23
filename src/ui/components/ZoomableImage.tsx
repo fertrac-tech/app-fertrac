@@ -3,7 +3,13 @@ import { TransformComponent, TransformWrapper, type ReactZoomPanPinchRef } from 
 import './ZoomableImage.css';
 
 /** Límites y pasos del zoom del visor (opción 2: diálogo con controles). */
-export const ZOOM = { min: 1, max: 4, step: 0.5, doubleTap: 2.5, animMs: 200 } as const;
+/**
+ * Límites y pasos del zoom del visor (opción 2: diálogo con controles).
+ * `wheelStep`: la librería (con `smooth`) multiplica el paso por |deltaY| del evento. Un "clic" de
+ * rueda de mouse trae deltaY ≈ 100, así que 0,0025 → +25 % por clic; el trackpad (deltaY 2–10)
+ * avanza de forma continua. Con 0,15 un solo clic saltaba de 100 % a 400 %.
+ */
+export const ZOOM = { min: 1, max: 4, step: 0.5, doubleTap: 2.5, wheelStep: 0.0025, animMs: 200 } as const;
 
 export const clampScale = (s: number) => Math.min(ZOOM.max, Math.max(ZOOM.min, s));
 export const toPercent = (s: number) => `${Math.round(s * 100)}%`;
@@ -98,7 +104,7 @@ export function ZoomableImage({ src, alt, onError, onScaleChange, onBackdropClic
             maxScale={ZOOM.max}
             limitToBounds
             doubleClick={{ mode: 'toggle', step: ZOOM.doubleTap - 1, animationTime: ZOOM.animMs }}
-            wheel={{ step: 0.15 }}
+            wheel={{ step: ZOOM.wheelStep }}
             onTransform={(_, state) => updateScale(state.scale)}
           >
             <TransformComponent wrapperClass="zoomable__wrapper" contentClass="zoomable__content">

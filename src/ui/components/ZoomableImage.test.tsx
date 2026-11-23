@@ -17,6 +17,11 @@ describe('reglas de zoom', () => {
     expect(isZoomed(1.5)).toBe(true);
   });
 
+  it('un clic de rueda del mouse (deltaY ≈ 100) avanza 25 %, no salta al máximo', () => {
+    expect(ZOOM.wheelStep * 100).toBeCloseTo(0.25);
+    expect(ZOOM.min + ZOOM.wheelStep * 100).toBeLessThan(ZOOM.max);
+  });
+
   it('el marco fijo toma el tamaño de la foto ajustada al área', () => {
     expect(fitFrame({ w: 1600, h: 1200 }, { w: 400, h: 600 })).toEqual({ w: 400, h: 300 }); // limita el ancho
     expect(fitFrame({ w: 800, h: 1600 }, { w: 400, h: 600 })).toEqual({ w: 300, h: 600 }); // limita el alto
