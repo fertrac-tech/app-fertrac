@@ -1985,3 +1985,52 @@ p {
 .rail__profile[aria-current='page'] .avatar {
   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--brand-primary);
 }
+
+/* ── Aviso de privacidad propio (reemplaza el banner externo de la v10) ── */
+.consent {
+  position: fixed;
+  z-index: 65; /* sobre barra inferior, riel y detalle; debajo del visor de fotos */
+  left: calc(12px + var(--safe-left));
+  right: calc(12px + var(--safe-right));
+  bottom: calc(12px + var(--safe-bottom));
+  max-width: 520px;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.18);
+}
+.consent__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.consent__text {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.consent__link,
+.profile__link {
+  color: var(--brand-primary-strong);
+  font-size: 13px;
+  font-weight: 600;
+}
+.consent__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.consent__actions .btn {
+  flex: 1; /* mismo peso visual para aceptar y rechazar */
+}
+.profile__note {
+  font-size: 12px;
+  line-height: 1.4;
+}

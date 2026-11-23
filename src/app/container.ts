@@ -7,8 +7,10 @@ import { BrowserDeviceIdentity } from '@/adapters/device/browserDeviceIdentity';
 import { GoogleAuthProvider } from '@/adapters/google/googleAuthProvider';
 import { MockAuthProvider, MockCatalogSource, MockDeviceIdentity } from '@/adapters/mock/mockAdapters';
 import { IdbFavoritesRepository, IdbSnapshotStore } from '@/adapters/storage/idbStores';
+import { LocalConsentStore } from '@/adapters/storage/localConsentStore';
 import type { Analytics, AuthProvider, CatalogRepository, CatalogSource, DeviceIdentity } from '@/ports';
 import type { AppConfig } from './config';
+import { ConsentController } from './consentController';
 import { FavoritesController } from './favoritesController';
 import { SessionController } from './sessionController';
 
@@ -18,6 +20,7 @@ export interface Container {
   session: SessionController;
   favorites: FavoritesController;
   analytics: Analytics;
+  consent: ConsentController;
 }
 
 /**
@@ -62,12 +65,16 @@ export function createContainer(config: AppConfig): Container {
   const catalog = new SnapshotCatalogRepository(source, new IdbSnapshotStore(`fertrac_v2_catalog${suffix}`), Date.now, offlineMaxAgeMs);
   const session = new SessionController(auth, catalog, device, { offlineMaxAgeMs });
   holder.session = session;
+  // Aviso de privacidad propio: la decisión guardada fija el estado por defecto de Consent Mode.
+  const consentStore = new LocalConsentStore(`fertrac_v2_consent${suffix}`);
+  const savedConsent = ConsentController.initialDecision(consentStore);
   // GA4 solo con backend real y un ID válido; la demo nunca envía datos a Google.
   const analytics: Analytics =
     config.dataSource === 'appsscript' && config.ga4MeasurementId
-      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL })
+      ? new Ga4Analytics({ measurementId: config.ga4MeasurementId, basePath: import.meta.env.BASE_URL, analyticsConsent: savedConsent?.analytics ?? false })
       : new MemoryAnalytics();
+  const consent = new ConsentController(consentStore, analytics);
   const favorites = new FavoritesController(new IdbFavoritesRepository(`fertrac_v2_favorites${suffix}`), undefined, analytics);
 
-  return { config, catalog, session, favorites, analytics };
+  return { config, catalog, session, favorites, analytics, consent };
 }

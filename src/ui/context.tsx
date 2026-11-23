@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Container } from '@/app/container';
 import type { AppState } from '@/app/sessionController';
+import type { ConsentState } from '@/domain/consent';
 import type { FavoritesState } from '@/domain/favorites';
 
 const ContainerContext = createContext<Container | null>(null);
@@ -32,6 +33,11 @@ export function useReady(): ReadyState {
 export function useFavoritesState(): FavoritesState {
   const { favorites } = useContainer();
   return useSyncExternalStore(favorites.subscribe, favorites.getState);
+}
+
+export function useConsentState(): ConsentState {
+  const { consent } = useContainer();
+  return useSyncExternalStore(consent.subscribe, consent.getState);
 }
 
 // ── Breakpoints del diseño: compacto < 600 · medio 600–1023 · expandido ≥ 1024 ──

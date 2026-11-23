@@ -6,6 +6,7 @@ import { FavoritesScreen } from './screens/FavoritesScreen';
 import { DeviceScreen, LoginScreen, Splash } from './screens/GateScreens';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { useAnalyticsTracking } from './analytics/useAnalyticsTracking';
+import { ConsentBanner } from './components/ConsentBanner';
 import { ThemeProvider, useAppState, useContainer } from './context';
 
 function Gate() {
@@ -42,6 +43,7 @@ function Gate() {
   return (
     <>
       {screen}
+      {state.status !== 'loading' && <ConsentBanner />}
       {config.environmentLabel && <span className="env-badge">{config.environmentLabel}</span>}
     </>
   );

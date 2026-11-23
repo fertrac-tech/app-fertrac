@@ -1,5 +1,7 @@
 import { render } from '@testing-library/react';
 import { MemoryAnalytics } from '@/adapters/analytics/memoryAnalytics';
+import { ConsentController } from '@/app/consentController';
+import { CONSENT_VERSION } from '@/domain/consent';
 import { SnapshotCatalogRepository } from '@/adapters/catalog/snapshotCatalogRepository';
 import { MockCatalogSource } from '@/adapters/mock/mockAdapters';
 import type { Container } from '@/app/container';
@@ -48,6 +50,8 @@ interface Options {
   catalogSize?: number;
   privacyPolicyUrl?: string;
   systemDark?: boolean;
+  /** Decisión de privacidad guardada; por defecto ya aceptada (el aviso no estorba las demás pruebas). */
+  consent?: 'pending' | 'granted' | 'denied';
 }
 
 export function renderApp(options: Options = {}) {
@@ -82,6 +86,9 @@ export function renderApp(options: Options = {}) {
   const saved = new Map<string, FavoritesState>();
   let id = 0;
   const analytics = new MemoryAnalytics();
+  const consentOption = options.consent ?? 'granted';
+  let consentSaved: unknown =
+    consentOption === 'pending' ? null : { analytics: consentOption === 'granted', version: CONSENT_VERSION, decidedAt: 1 };
   const favorites = new FavoritesController(
     { load: async (k) => saved.get(k) ?? emptyFavorites(), save: async (k, s) => void saved.set(k, s) },
     () => `lista-${(id += 1)}`,
@@ -97,6 +104,11 @@ export function renderApp(options: Options = {}) {
     session: new SessionController(auth, catalog, device),
     favorites,
     analytics,
+    consent: new ConsentController(
+      { load: () => consentSaved, save: (d) => void (consentSaved = d) },
+      analytics,
+      () => 1_700_000_000_000,
+    ),
   };
 
   const view = render(

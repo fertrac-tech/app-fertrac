@@ -5,6 +5,7 @@
  */
 import type { AccessCode } from '@/domain/access';
 import type { AnalyticsEvent, AnalyticsScreen } from '@/domain/analytics';
+import type { ConsentDecision } from '@/domain/consent';
 import type { CatalogPage, CatalogQuery, Facets } from '@/domain/catalogQuery';
 import type { FavoritesState } from '@/domain/favorites';
 import type { Product } from '@/domain/product';
@@ -156,4 +157,12 @@ export interface Analytics {
   /** Vista de pantalla (Catálogo, Favoritos, Perfil), siempre sin parámetros de URL. */
   screen(screen: AnalyticsScreen): void;
   track(event: AnalyticsEvent): void;
+  /** Consent Mode: con `false` no hay cookies de analítica ni user_id (solo señales sin cookies). */
+  setConsent(analyticsGranted: boolean): void;
+}
+
+/** Decisión de consentimiento guardada en el dispositivo. `load` devuelve el dato crudo: lo valida el dominio. */
+export interface ConsentStore {
+  load(): unknown;
+  save(decision: ConsentDecision): void;
 }
