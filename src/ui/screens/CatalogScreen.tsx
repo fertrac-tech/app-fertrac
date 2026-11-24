@@ -8,7 +8,8 @@ import { formatCount } from '@/domain/text';
 import { EditFavoriteSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
 import { Watermark } from '../components/Watermark';
-import { EmptyState, ListSkeleton, PaginationBar, ProductCards, ProductTable } from '../components/ProductViews';
+import { LoadingEngine } from '../components/EngineLoader';
+import { EmptyState, PaginationBar, ProductCards, ProductTable } from '../components/ProductViews';
 import { MultiSelectFilter } from '../components/MultiSelectFilter';
 import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
@@ -222,7 +223,7 @@ export function CatalogScreen() {
         <div className={`catalog__area${expanded && page && page.total > 0 ? ' catalog__area--table' : ''}`}>
         <div className={expanded ? 'catalog__list' : 'scroll'} ref={scrollRef} data-scroll={expanded ? undefined : true} style={expanded ? { minHeight: 0 } : undefined}>
           {!page ? (
-            <ListSkeleton />
+            <LoadingEngine kind="catalogo" className="eng-loader--center" />
           ) : page.total === 0 ? (
             <EmptyState title="Sin resultados">
               <span>Revisa la búsqueda o quita filtros.</span>

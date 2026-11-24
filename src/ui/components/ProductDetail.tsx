@@ -12,6 +12,7 @@ import { ConditionPill, FavButton, HeaderCurve, Icon, Logo, StockPill } from './
 import { Watermark } from './Watermark';
 import { ZoomableImage, isZoomed } from './ZoomableImage';
 import { useContainer } from '../context';
+import { LoadingEngine } from './EngineLoader';
 
 interface Props {
   product: Product | undefined;
@@ -266,7 +267,7 @@ export function ProductDetail({ product, loading, alias, favorite, dismiss, onDi
 
       {!product ? (
         <div className="empty">
-          {loading ? <Icon name="refresh" size={28} className="spin" /> : <strong>Este producto ya no está en el catálogo</strong>}
+          {loading ? <LoadingEngine kind="detalle" small label="Cargando producto…" /> : <strong>Este producto ya no está en el catálogo</strong>}
         </div>
       ) : (
         <>

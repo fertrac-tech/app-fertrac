@@ -113,16 +113,6 @@ export function ProductTable({ items, selectedRef, isFavorite, onOpen, onFavorit
   );
 }
 
-export function ListSkeleton({ rows = 8 }: { rows?: number }) {
-  return (
-    <ul className="cards" aria-hidden="true">
-      {Array.from({ length: rows }, (_, i) => (
-        <li key={i} className="skeleton" />
-      ))}
-    </ul>
-  );
-}
-
 export function EmptyState({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div className="empty">

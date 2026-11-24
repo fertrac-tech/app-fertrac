@@ -1,0 +1,152 @@
+/* ===== EngineLoader — tema (sobrescribible) ===== */
+.eng-loader {
+  --eng-red: #e53935;
+  --eng-red-dk: #b71c1c;
+  --eng-hi: #ff8a80;
+  --eng-ink: #1f1a24;
+  --eng-steel: #b0bac4;
+  --eng-steel-dk: #5b6670;
+  --eng-bg: transparent;
+  --eng-text: var(--text-primary, #1f1a24); /* sigue el tema claro/oscuro de la app */
+  --cycle: 24s;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--eng-bg);
+  font-family: ui-rounded, "Nunito", system-ui, sans-serif;
+  color: var(--eng-text);
+}
+.eng-loader--full {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  justify-content: center;
+  --eng-bg: var(--bg-app, #fff8e7);
+}
+.eng-svg { width: min(420px, 90vw); height: auto; overflow: visible; }
+
+/* Variantes para la app: centrado en un área y tamaño compacto (inspector / detalle) */
+.eng-loader--center { flex: 1 1 auto; justify-content: center; min-height: 320px; }
+.eng-loader--compact { gap: 8px; padding: 8px; }
+.eng-loader--compact .eng-svg { width: min(240px, 70vw); }
+.eng-loader--compact .eng-bar { width: min(200px, 60vw); height: 12px; }
+.eng-loader--compact .eng-msg { font-size: .92rem; }
+
+/* ===== Estilo cartoon: contornos gruesos ===== */
+.eng-svg .o  { stroke: var(--eng-ink); stroke-width: 4; stroke-linejoin: round; }
+.eng-svg .o3 { stroke: var(--eng-ink); stroke-width: 3; stroke-linejoin: round; }
+.eng-svg .fill-red    { fill: var(--eng-red); }
+.eng-svg .fill-red-dk { fill: var(--eng-red-dk); }
+.eng-svg .fill-hi     { fill: var(--eng-hi); opacity: .75; }
+.eng-svg .fill-steel  { fill: var(--eng-steel); }
+.eng-svg .fill-steel-dk { fill: var(--eng-steel-dk); }
+.eng-svg .fill-ink    { fill: var(--eng-ink); }
+.eng-svg .fill-white  { fill: #fff; }
+.eng-svg .fill-window { fill: #2a2230; }
+.eng-svg .fill-none   { fill: none; }
+.eng-svg .shroud      { fill: rgba(91, 102, 112, .18); }
+.eng-svg .blade       { fill: none; stroke: var(--eng-ink); stroke-width: 3; stroke-linecap: round; }
+.eng-svg .shine       { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; opacity: .7; }
+.eng-svg .smile       { fill: none; stroke: var(--eng-ink); stroke-width: 3.5; stroke-linecap: round; }
+.eng-svg .needle      { stroke: var(--eng-red-dk); stroke-width: 4; stroke-linecap: round; }
+.eng-svg .tach-green  { fill: none; stroke: #43a047; stroke-width: 5; }
+.eng-svg .tach-red    { fill: none; stroke: var(--eng-red); stroke-width: 5; }
+.eng-svg .tach-label  { font: 800 9px ui-rounded, system-ui, sans-serif; fill: var(--eng-ink); text-anchor: middle; }
+
+/* ===== Ensamblaje: caen, rebotan y al final salen volando ===== */
+.eng-svg .part, .eng-svg .eng-shadow {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: eng-drop var(--cycle) linear infinite both;
+}
+@keyframes eng-drop {
+  0%    { transform: translateY(-340px); opacity: 0; animation-timing-function: cubic-bezier(.5, 0, 1, .5); }
+  1%    { opacity: 1; }
+  4.5%  { transform: translateY(0) scale(1.06, .86); animation-timing-function: ease-out; }
+  5.5%  { transform: translateY(-14px) scale(.97, 1.04); animation-timing-function: ease-in; }
+  6.5%  { transform: translateY(0) scale(1, 1); }
+  88%   { transform: translateY(0); opacity: 1; animation-timing-function: cubic-bezier(.6, -0.4, .8, .5); }
+  92%   { transform: translateY(-380px) rotate(-12deg); opacity: 0; }
+  100%  { transform: translateY(-380px); opacity: 0; }
+}
+.eng-svg .eng-shadow { fill: rgba(0, 0, 0, .14); animation-name: eng-shadow; transform-origin: 50% 50%; }
+@keyframes eng-shadow {
+  0%       { transform: scaleX(.3); opacity: 0; }
+  6%, 88%  { transform: scaleX(1); opacity: 1; }
+  93%,100% { transform: scaleX(.3); opacity: 0; }
+}
+
+/* ===== Parpadeo ===== */
+.eng-svg .eyes { transform-box: fill-box; transform-origin: center; animation: eng-blink 3.6s infinite; }
+@keyframes eng-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  94%           { transform: scaleY(.1); }
+}
+
+/* ===== Humo: negro al arrancar, gris en marcha ===== */
+.eng-svg .smoke { opacity: 0; animation: var(--cycle) linear infinite; }
+.eng-svg .smoke--dark  { fill: #3b3540; animation-name: eng-gate-dark; }
+.eng-svg .smoke--light { fill: #d9dde2; animation-name: eng-gate-light; }
+@keyframes eng-gate-dark  { 0%,16% {opacity:0} 17%,26% {opacity:1} 28%,100% {opacity:0} }
+@keyframes eng-gate-light { 0%,26% {opacity:0} 29%,86% {opacity:.95} 90%,100% {opacity:0} }
+
+.eng-svg .puff { transform-box: fill-box; transform-origin: center; animation: eng-puff 1.8s ease-out infinite; }
+@keyframes eng-puff {
+  0%   { transform: translate(0, 0) scale(.3); opacity: .95; }
+  100% { transform: translate(30px, -72px) scale(2.3); opacity: 0; }
+}
+
+/* ===== Chispas en la fase de máxima potencia ===== */
+.eng-svg .star {
+  fill: #ffd54f; stroke: var(--eng-ink); stroke-width: 2; stroke-linejoin: round;
+  transform-box: fill-box; transform-origin: center;
+  opacity: 0;
+  animation: eng-star var(--cycle) linear infinite;
+}
+@keyframes eng-star {
+  0%, 67%   { transform: scale(0) rotate(0); opacity: 0; }
+  70%       { transform: scale(1.2) rotate(45deg); opacity: 1; }
+  74%       { transform: scale(.8) rotate(90deg); opacity: 1; }
+  78%       { transform: scale(1.2) rotate(135deg); opacity: 1; }
+  82%       { transform: scale(.8) rotate(180deg); opacity: 1; }
+  86%, 100% { transform: scale(0) rotate(225deg); opacity: 0; }
+}
+
+/* ===== Mensaje y barra ===== */
+.eng-msg { margin: 0; font-weight: 800; font-size: 1.05rem; letter-spacing: .2px; min-height: 1.4em; }
+.eng-bar {
+  width: min(320px, 80vw); height: 16px;
+  border: 3px solid var(--eng-ink); border-radius: 999px;
+  background: #fff; overflow: hidden;
+}
+.eng-bar__fill {
+  height: 100%; width: 0;
+  background: repeating-linear-gradient(-45deg, var(--eng-red) 0 10px, var(--eng-red-dk) 10px 20px);
+  background-size: 28px 28px;
+  animation: eng-fill var(--cycle) ease-in-out infinite, eng-stripes .6s linear infinite;
+}
+.eng-bar__fill--real { animation: eng-stripes .6s linear infinite; transition: width .3s ease; }
+/* Modo compacto (< 3 s): motor ya armado, humo negro breve, barra que se llena en el tiempo esperado */
+.eng-loader--quick .eng-svg .part,
+.eng-loader--quick .eng-svg .eng-shadow { animation: none; }
+.eng-loader--quick .eng-svg .smoke--dark  { animation-name: eng-gate-dark-q; }
+.eng-loader--quick .eng-svg .smoke--light { animation-name: eng-gate-light-q; }
+.eng-loader--quick .eng-bar__fill:not(.eng-bar__fill--real) {
+  animation: eng-fill-q var(--fill-dur) cubic-bezier(.2, .7, .3, 1) forwards, eng-stripes .6s linear infinite;
+}
+@keyframes eng-gate-dark-q  { 0% {opacity:0} 3%,18% {opacity:1} 24%,100% {opacity:0} }
+@keyframes eng-gate-light-q { 0%,18% {opacity:0} 26%,100% {opacity:.95} }
+@keyframes eng-fill-q { from { width: 0 } to { width: 92% } }
+
+@keyframes eng-fill    { 0% { width: 0 } 92% { width: 100% } 100% { width: 100% } }
+@keyframes eng-stripes { to { background-position: 28px 0; } }
+
+/* ===== Accesibilidad: sin movimiento ===== */
+@media (prefers-reduced-motion: reduce) {
+  .eng-loader *, .eng-loader *::before { animation: none !important; }
+  .eng-loader .smoke--light { opacity: .95; }
+  .eng-bar__fill:not(.eng-bar__fill--real) { width: 60%; }
+}

@@ -5,7 +5,8 @@ import { priorityTier, type Product } from '@/domain/product';
 import { normalize } from '@/domain/text';
 import { DeleteListSheet, EditFavoriteSheet, ListNameSheet } from '../components/FavoriteSheets';
 import { ProductDetail } from '../components/ProductDetail';
-import { EmptyState, ListSkeleton, ProductCards, ProductTable, type ProductItem } from '../components/ProductViews';
+import { LoadingEngine } from '../components/EngineLoader';
+import { EmptyState, ProductCards, ProductTable, type ProductItem } from '../components/ProductViews';
 import { HeaderCurve, Icon } from '../components/primitives';
 import { useBreakpoint, useContainer, useFavoritesState, useQuery, useReady } from '../context';
 import { closeWithTransform, openWithTransform } from '../motion/viewTransition';
@@ -165,7 +166,7 @@ export function FavoritesScreen() {
           </div>
 
           {!allProducts ? (
-            <ListSkeleton rows={4} />
+            <LoadingEngine kind="favoritos" className="eng-loader--center" />
           ) : items.length === 0 ? (
             <EmptyState title={total === 0 ? 'Aún no tienes favoritos' : 'Sin productos en esta vista'}>
               <span>{total === 0 ? 'Toca la estrella de un producto del catálogo para guardarlo aquí.' : 'Asigna productos a esta lista desde "Editar favorito".'}</span>

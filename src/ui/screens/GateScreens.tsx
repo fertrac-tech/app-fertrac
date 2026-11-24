@@ -4,6 +4,7 @@ import { accessMessage, evaluateAccess } from '@/domain/access';
 import { CONSENT_COPY, PrivacyPolicyLink } from '../components/consentCopy';
 import { Icon, Logo, ThemeToggle } from '../components/primitives';
 import { useConsentState, useContainer } from '../context';
+import { LoadingEngine } from '../components/EngineLoader';
 
 /** Bloque obligatorio en Login y Dispositivo pendiente (Ley 1581 de 2012). */
 export function DataProtectionNotice() {
@@ -157,8 +158,8 @@ export function ConsentScreen({ email }: { email: string }) {
 
 export function Splash() {
   return (
-    <div className="splash" role="status" aria-label="Cargando">
-      <Icon name="refresh" size={32} className="spin" />
+    <div className="splash">
+      <LoadingEngine kind="sesion" />
     </div>
   );
 }
