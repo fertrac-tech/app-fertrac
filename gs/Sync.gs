@@ -341,6 +341,7 @@ function ejecutarCompleta_() {
     filaVacia[8]  = datos.marca || 0;
     filaVacia[9]  = 0;
     filaVacia[10] = datos.precio;
+
     filaVacia[11] = datos.neto5;
     filaVacia[12] = datos.neto8;
     filaVacia[13] = datos.promo;
@@ -369,7 +370,7 @@ function ejecutarCompleta_() {
     const formulasB = new Array(totalFilasB);
     for (let i = 0; i < totalFilasB; i++) {
       const fila = MOTOR_DATA_ROW + i;
-      formulasB[i] = ['=IF(A' + fila + '="", "", IFERROR(VLOOKUP(A' + fila + '&"", ' + CONFIG.SHEET_CACHE + '!A:C, 3, FALSE), "Sin Foto"))'];
+      formulasB[i] = ['=IF(A' + fila + '="";""; IFERROR(VLOOKUP(A' + fila + '&""; ' + CONFIG.SHEET_CACHE + '!A:C; 3; FALSE); "Sin Foto"))'];
     }
     shMotor.getRange(MOTOR_DATA_ROW, MOTOR_COL_FOTO, totalFilasB, 1).setFormulas(formulasB);
   }
@@ -386,4 +387,81 @@ function ejecutarCompleta_() {
 function textoClasif_(v) {
   const t = String(v == null ? "" : v).trim().toUpperCase();
   return (t === "0") ? "" : t;
+}
+
+/**
+ * Lee e imprime en el registro de ejecución la fórmula exacta y el valor
+ * visible guardados en la celda B2 de Hoja2 para diagnóstico.
+ */
+function diagnosticarFormulaB2() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shMotor = ss.getSheetByName(CONFIG.SHEET_MOTOR);
+  if (!shMotor) {
+    throw new Error('Hoja "' + CONFIG.SHEET_MOTOR + '" no encontrada.');
+  }
+
+  const celda = shMotor.getRange("B2");
+  const formula = celda.getFormula();
+  const valorVisible = celda.getDisplayValue();
+
+  const valorRaw = celda.getValue();
+
+  console.log("Hoja2!B2 getFormula(): " + JSON.stringify(formula));
+  console.log("Hoja2!B2 getDisplayValue(): " + JSON.stringify(valorVisible));
+  console.log("Hoja2!B2 getValue(): " + JSON.stringify(valorRaw));
+}
+
+/**
+ * Evalúa cuatro variantes de la fórmula de foto en la celda auxiliar X2 de Hoja2
+ * e imprime la fórmula guardada y el resultado visible de cada una, restaurando
+ * el contenido original de X2 al finalizar.
+ */
+function probarVariantesFormulaB2() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const shMotor = ss.getSheetByName(CONFIG.SHEET_MOTOR);
+  if (!shMotor) {
+    throw new Error('Hoja "' + CONFIG.SHEET_MOTOR + '" no encontrada.');
+  }
+
+  const celdaPrueba = shMotor.getRange("X2");
+  const formulaOriginal = celdaPrueba.getFormula();
+  const valorOriginal = celdaPrueba.getValue();
+
+  const variantes = [
+    {
+      nombre: "1_actual_comas_sin_comillas",
+      formula: '=IF(A2="","", IFERROR(VLOOKUP(A2&"", ' + CONFIG.SHEET_CACHE + '!A:C, 3, FALSE), "Sin Foto"))'
+    },
+    {
+      nombre: "2_comas_con_comillas_hoja",
+      formula: '=IF(A2="","", IFERROR(VLOOKUP(A2&"", \'' + CONFIG.SHEET_CACHE + '\'!A:C, 3, FALSE), "Sin Foto"))'
+    },
+    {
+      nombre: "3_solo_vlookup",
+      formula: '=VLOOKUP(A2&"", \'' + CONFIG.SHEET_CACHE + '\'!A:C, 3, FALSE)'
+    },
+    {
+      nombre: "4_punto_y_coma_en_setFormula",
+      formula: '=IF(A2="";""; IFERROR(VLOOKUP(A2&""; \'' + CONFIG.SHEET_CACHE + '\'!A:C; 3; FALSE); "Sin Foto"))'
+    }
+  ];
+
+  try {
+    variantes.forEach(function (v) {
+      celdaPrueba.setFormula(v.formula);
+      SpreadsheetApp.flush();
+      console.log(
+        v.nombre +
+        " | formula=" + JSON.stringify(celdaPrueba.getFormula()) +
+        " | display=" + JSON.stringify(celdaPrueba.getDisplayValue())
+      );
+    });
+  } finally {
+    if (formulaOriginal) {
+      celdaPrueba.setFormula(formulaOriginal);
+    } else {
+      celdaPrueba.setValue(valorOriginal);
+    }
+    SpreadsheetApp.flush();
+  }
 }

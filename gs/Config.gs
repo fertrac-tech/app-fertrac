@@ -105,13 +105,13 @@ const CONFIG = {
   // true  = CUMPLIMIENTO: bloquea según usuario, canal y dispositivo.
   ENFORCE_DISPOSITIVOS:       false,
   CANAL_POR_DEFECTO:          "APP",                 // usuarios con CANAL vacío en USUARIOS AUTORIZADOS
-  MAX_DISPOSITIVOS_POR_CANAL: { APP: 1, WEB: 2 },    // aprobados por usuario y canal (PWA = WEB)
+  MAX_DISPOSITIVOS_POR_CANAL: { APP: 2, WEB: 2 },    // aprobados por usuario y canal (PWA = WEB)
   MAX_PENDIENTES_POR_USUARIO: 3,
   // Cuenta @fertrac.com verificada que no está en USUARIOS AUTORIZADOS → se agrega como PENDIENTE
   // (con su dispositivo) y se avisa al aprobador. false = solo "Cuenta sin acceso".
   SOLICITUD_ACCESO_AUTOMATICA: true,
   BLOQUEAR_WEB_ANDROID:       true,                  // celular Android por navegador/PWA → solo la APK                     // evita llenar la hoja/correo con IDs nuevos
-  APROBADORES_DISPOSITIVOS:   ["data_science@fertrac.com"],
+  APROBADORES_DISPOSITIVOS:   ["data_science@fertrac.com","ctorres@fertrac.com"],
   LOGO_URL:                   "https://app.fertrac.com/logo3.png",   // logo del correo de aprobación
   // Cliente OAuth emisor (azp) esperado por canal. Vacío = no se verifica.
   // Se llena con los valores reales de la columna AZP tras la observación.
